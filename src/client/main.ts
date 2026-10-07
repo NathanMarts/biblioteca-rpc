@@ -44,7 +44,22 @@ const acoes: Record<string, Acao> = {
   },
   "Devolver livro": async (cliente) => {
     const usuario = await escolherUsuario(cliente);
-    const livro = await escolherLivro(cliente);
+    // Oferece só os Livros que estão com o Usuário.
+    const { emprestimos } = await cliente.consultarEmprestimosUsuario(usuario);
+    if (emprestimos.length === 0) {
+      console.log("Nenhum empréstimo encontrado para o usuário");
+      return;
+    }
+    const livro = await select({
+      message: "Livro a devolver:",
+      choices: emprestimos.map((e) => ({
+        name: `${e.codigoLivro}  ${e.titulo} (exemplar ${e.codigoExemplar}, ${
+          e.situacao === Situacao.ATRASADO ? `atrasado, prazo até ${e.dataLimite}` : `devolver até ${e.dataLimite}`
+        })`,
+        value: e.codigoLivro,
+      })),
+      pageSize: 12,
+    });
     const resposta = await cliente.devolverLivro(usuario, livro);
     console.log(`✔ Exemplar ${resposta.codigoExemplar} devolvido em ${resposta.dataDevolucao}.`);
   },

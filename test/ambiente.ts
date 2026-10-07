@@ -1,5 +1,6 @@
 import { status } from "@grpc/grpc-js";
 import { expect } from "vitest";
+import { gerarCertificado } from "../src/certificados.js";
 import { criarCliente, type ClienteBiblioteca } from "../src/client/cliente.js";
 import type { DadosIniciais } from "../src/server/dados.js";
 import { relogioFixo } from "../src/server/relogio.js";
@@ -7,9 +8,13 @@ import { iniciarServidor } from "../src/server/servidor.js";
 
 export const HOJE = "2026-10-20";
 
+/** Um certificado por arquivo de teste: todos os testes conversam com o servidor via TLS. */
+const certificado = gerarCertificado();
+
 const BIBLIOTECARIO_PADRAO = { login: "teste", nome: "Bibliotecário de Teste", senha: "senha-teste" };
 
 export interface Ambiente {
+  endereco: string;
   /** Cliente já autenticado com o primeiro bibliotecário dos dados. */
   cliente: ClienteBiblioteca;
   /** Cria um cliente sem login, encerrado junto com o ambiente. */
@@ -24,6 +29,7 @@ export async function iniciarTeste(
   opcoes: { agora?: () => number } = {},
 ): Promise<Ambiente> {
   const bibliotecarios = dados.bibliotecarios ?? [BIBLIOTECARIO_PADRAO];
+  const tls = await certificado;
   const servidor = await iniciarServidor({
     banco: ":memory:",
     host: "127.0.0.1",
@@ -32,16 +38,18 @@ export async function iniciarTeste(
     agora: opcoes.agora,
     dadosIniciais: { usuarios: [], livros: [], emprestimos: [], ...dados, bibliotecarios },
     log: false,
+    tls,
   });
   const clientes: ClienteBiblioteca[] = [];
   const novoCliente = () => {
-    const cliente = criarCliente(servidor.endereco);
+    const cliente = criarCliente(servidor.endereco, { certificado: tls.certificado });
     clientes.push(cliente);
     return cliente;
   };
   const cliente = novoCliente();
   if (bibliotecarios.length > 0) await cliente.entrar(bibliotecarios[0].login, bibliotecarios[0].senha);
   return {
+    endereco: servidor.endereco,
     cliente,
     novoCliente,
     async encerrar() {

@@ -1,4 +1,4 @@
-import { BANCO, HOST, PORTA } from "../config.js";
+import { ARQUIVO_CERTIFICADO, ARQUIVO_CHAVE, BANCO, HOST, lerArquivoTls, PORTA, TLS_LIGADO } from "../config.js";
 import { relogioDoAmbiente, type Relogio } from "./relogio.js";
 import { dadosDeDemonstracao } from "./seed.js";
 import { iniciarServidor, type ServidorEmExecucao } from "./servidor.js";
@@ -14,13 +14,16 @@ try {
     relogio,
     dadosIniciais: dadosDeDemonstracao(relogio()),
     log: true,
+    tls: TLS_LIGADO
+      ? { certificado: lerArquivoTls(ARQUIVO_CERTIFICADO), chave: lerArquivoTls(ARQUIVO_CHAVE) }
+      : undefined,
   });
 } catch (erro) {
   console.error(`Não foi possível iniciar o servidor: ${erro instanceof Error ? erro.message : erro}`);
   process.exit(1);
 }
 
-console.log(`Servidor da Biblioteca escutando em ${servidor.endereco}`);
+console.log(`Servidor da Biblioteca escutando em ${servidor.endereco} (${TLS_LIGADO ? "TLS" : "SEM criptografia"})`);
 console.log(`Banco: ${BANCO} | Hoje: ${relogio()}`);
 
 process.on("SIGINT", async () => {

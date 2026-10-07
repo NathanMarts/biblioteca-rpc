@@ -1,4 +1,5 @@
 import * as grpc from "@grpc/grpc-js";
+import type { CertificadoTls } from "../certificados.js";
 import { BibliotecaService, Situacao, type BibliotecaServer } from "../generated/biblioteca.js";
 import { Autenticacao } from "./autenticacao.js";
 import { Biblioteca } from "./biblioteca.js";
@@ -21,6 +22,8 @@ export interface ConfiguracaoServidor {
   dadosIniciais: DadosIniciais;
   /** Registrar cada chamada no console. */
   log: boolean;
+  /** Certificado e chave do servidor; sem eles, a conexão não é criptografada. */
+  tls?: CertificadoTls;
 }
 
 export interface ServidorEmExecucao {
@@ -81,7 +84,13 @@ export async function iniciarServidor(config: ConfiguracaoServidor): Promise<Ser
   const porta = await new Promise<number>((resolve, reject) =>
     server.bindAsync(
       `${config.host}:${config.porta}`,
-      grpc.ServerCredentials.createInsecure(),
+      config.tls
+        ? grpc.ServerCredentials.createSsl(
+            null,
+            [{ cert_chain: Buffer.from(config.tls.certificado), private_key: Buffer.from(config.tls.chave) }],
+            false,
+          )
+        : grpc.ServerCredentials.createInsecure(),
       (erro, porta) => (erro ? reject(erro) : resolve(porta)),
     ),
   );

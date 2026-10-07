@@ -1,6 +1,6 @@
 import { status, type ServiceError } from "@grpc/grpc-js";
 import { input, password, select } from "@inquirer/prompts";
-import { ENDERECO } from "../config.js";
+import { ARQUIVO_CERTIFICADO, ENDERECO, lerArquivoTls, TLS_LIGADO } from "../config.js";
 import { Situacao, type Exemplar } from "../generated/biblioteca.js";
 import { criarCliente, type ClienteBiblioteca } from "./cliente.js";
 import { perguntar, selecionar, VOLTAR } from "./prompts.js";
@@ -165,7 +165,14 @@ const SAIR_DA_SESSAO = "Sair da sessão";
 const SAIR = "Sair";
 
 async function main() {
-  const cliente = criarCliente(ENDERECO);
+  let certificado: string | undefined;
+  try {
+    certificado = TLS_LIGADO ? lerArquivoTls(ARQUIVO_CERTIFICADO) : undefined;
+  } catch (erro) {
+    console.error(`✖ ${erro instanceof Error ? erro.message : erro}`);
+    process.exit(1);
+  }
+  const cliente = criarCliente(ENDERECO, { certificado });
   console.log(`Biblioteca — balcão do bibliotecário (servidor: ${ENDERECO})\n`);
   try {
     let bibliotecario = await entrar(cliente);

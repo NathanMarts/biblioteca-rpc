@@ -69,9 +69,17 @@ export interface ClienteBiblioteca {
   fechar(): void;
 }
 
-export function criarCliente(endereco: string): ClienteBiblioteca {
+export interface OpcoesCliente {
+  /** Certificado (PEM) do servidor em que o cliente confia; sem ele, a conexão não é criptografada. */
+  certificado?: string;
+}
+
+export function criarCliente(endereco: string, opcoes: OpcoesCliente = {}): ClienteBiblioteca {
   let token: string | undefined;
-  const stub = new BibliotecaClient(endereco, grpc.credentials.createInsecure(), {
+  const credenciais = opcoes.certificado
+    ? grpc.credentials.createSsl(Buffer.from(opcoes.certificado))
+    : grpc.credentials.createInsecure();
+  const stub = new BibliotecaClient(endereco, credenciais, {
     interceptors: [anexarToken(() => token)],
   });
   return {

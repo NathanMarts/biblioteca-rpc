@@ -6,6 +6,7 @@
     "servidor": "tsx src/server/main.ts",
     "cliente": "tsx src/client/main.ts",
     "reset": "tsx src/server/reset.ts",
+    "certificados": "tsx scripts/gerar-certificados.ts",
     "proto": "node scripts/gerar-proto.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
@@ -24,6 +25,7 @@
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.20.5",
     "grpc-tools": "^1.13.1",
+    "selfsigned": "^5.5.0",
     "ts-proto": "^2.13.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

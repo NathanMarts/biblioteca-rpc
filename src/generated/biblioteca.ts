@@ -21,6 +21,17 @@ import {
 
 export const protobufPackage = "biblioteca";
 
+/**
+ * Contrato da API RPC da Biblioteca (fonte da verdade; o código TypeScript é gerado a partir daqui).
+ *
+ * Convenções:
+ * - Livros, Exemplares e Usuários são identificados por códigos: "L001", "L001-1", "U001".
+ * - Datas são strings no formato AAAA-MM-DD (só o dia importa).
+ * - Erros de negócio são sinalizados pelo status code do gRPC, com a mensagem em português
+ *   no campo "details" (ver docs/adr/0003-erros-como-status-grpc.md).
+ * - Consultas sem resultado retornam listas vazias, não erros.
+ */
+
 /** Situação de um Empréstimo ativo em relação à data de hoje do servidor. */
 export enum Situacao {
   NAO_ESPECIFICADA = 0,
@@ -1974,7 +1985,7 @@ export const ConsultarEmprestimosLivroResponse: MessageFns<ConsultarEmprestimosL
 /** Serviço de empréstimo de livros de uma biblioteca. */
 export type BibliotecaService = typeof BibliotecaService;
 export const BibliotecaService = {
-  /** Lista os Usuários cadastrados. */
+  /** Lista os Usuários cadastrados. (Extra, além do enunciado: alimenta as listas de seleção do cliente.) */
   listarUsuarios: {
     path: "/biblioteca.Biblioteca/ListarUsuarios" as const,
     requestStream: false as const,
@@ -1986,7 +1997,7 @@ export const BibliotecaService = {
       Buffer.from(ListarUsuariosResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer): ListarUsuariosResponse => ListarUsuariosResponse.decode(value),
   },
-  /** Lista os Livros do acervo com a disponibilidade de Exemplares. */
+  /** Lista os Livros do acervo com a disponibilidade de Exemplares. (Extra, além do enunciado.) */
   listarLivros: {
     path: "/biblioteca.Biblioteca/ListarLivros" as const,
     requestStream: false as const,
@@ -2082,9 +2093,9 @@ export const BibliotecaService = {
 } as const;
 
 export interface BibliotecaServer extends UntypedServiceImplementation {
-  /** Lista os Usuários cadastrados. */
+  /** Lista os Usuários cadastrados. (Extra, além do enunciado: alimenta as listas de seleção do cliente.) */
   listarUsuarios: handleUnaryCall<ListarUsuariosRequest, ListarUsuariosResponse>;
-  /** Lista os Livros do acervo com a disponibilidade de Exemplares. */
+  /** Lista os Livros do acervo com a disponibilidade de Exemplares. (Extra, além do enunciado.) */
   listarLivros: handleUnaryCall<ListarLivrosRequest, ListarLivrosResponse>;
   /**
    * Informa se o Livro está disponível e a situação de cada Exemplar.
@@ -2118,7 +2129,7 @@ export interface BibliotecaServer extends UntypedServiceImplementation {
 }
 
 export interface BibliotecaClient extends Client {
-  /** Lista os Usuários cadastrados. */
+  /** Lista os Usuários cadastrados. (Extra, além do enunciado: alimenta as listas de seleção do cliente.) */
   listarUsuarios(
     request: ListarUsuariosRequest,
     callback: (error: ServiceError | null, response: ListarUsuariosResponse) => void,
@@ -2134,7 +2145,7 @@ export interface BibliotecaClient extends Client {
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: ListarUsuariosResponse) => void,
   ): ClientUnaryCall;
-  /** Lista os Livros do acervo com a disponibilidade de Exemplares. */
+  /** Lista os Livros do acervo com a disponibilidade de Exemplares. (Extra, além do enunciado.) */
   listarLivros(
     request: ListarLivrosRequest,
     callback: (error: ServiceError | null, response: ListarLivrosResponse) => void,

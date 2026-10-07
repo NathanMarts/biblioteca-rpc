@@ -1,13 +1,21 @@
+// Contrato da API RPC da Biblioteca (fonte da verdade; o código TypeScript é gerado a partir daqui).
+//
+// Convenções:
+// - Livros, Exemplares e Usuários são identificados por códigos: "L001", "L001-1", "U001".
+// - Datas são strings no formato AAAA-MM-DD (só o dia importa).
+// - Erros de negócio são sinalizados pelo status code do gRPC, com a mensagem em português
+//   no campo "details" (ver docs/adr/0003-erros-como-status-grpc.md).
+// - Consultas sem resultado retornam listas vazias, não erros.
 syntax = "proto3";
 
 package biblioteca;
 
 // Serviço de empréstimo de livros de uma biblioteca.
 service Biblioteca {
-  // Lista os Usuários cadastrados.
+  // Lista os Usuários cadastrados. (Extra, além do enunciado: alimenta as listas de seleção do cliente.)
   rpc ListarUsuarios(ListarUsuariosRequest) returns (ListarUsuariosResponse);
 
-  // Lista os Livros do acervo com a disponibilidade de Exemplares.
+  // Lista os Livros do acervo com a disponibilidade de Exemplares. (Extra, além do enunciado.)
   rpc ListarLivros(ListarLivrosRequest) returns (ListarLivrosResponse);
 
   // Informa se o Livro está disponível e a situação de cada Exemplar.

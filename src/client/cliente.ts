@@ -1,6 +1,7 @@
 import * as grpc from "@grpc/grpc-js";
 import {
   BibliotecaClient,
+  type ConsultarEmprestimosLivroResponse,
   type ConsultarEmprestimosUsuarioResponse,
   type ConsultarLivroResponse,
   type DevolverLivroResponse,
@@ -29,6 +30,7 @@ export interface ClienteBiblioteca {
   ): Promise<RealizarEmprestimoResponse>;
   devolverLivro(codigoUsuario: string, codigoLivro: string): Promise<DevolverLivroResponse>;
   consultarEmprestimosUsuario(codigoUsuario: string): Promise<ConsultarEmprestimosUsuarioResponse>;
+  consultarEmprestimosLivro(codigoLivro: string): Promise<ConsultarEmprestimosLivroResponse>;
   fechar(): void;
 }
 
@@ -44,6 +46,8 @@ export function criarCliente(endereco: string): ClienteBiblioteca {
       chamar(stub.devolverLivro.bind(stub), { codigoUsuario, codigoLivro }),
     consultarEmprestimosUsuario: (codigoUsuario) =>
       chamar(stub.consultarEmprestimosUsuario.bind(stub), { codigoUsuario }),
+    consultarEmprestimosLivro: (codigoLivro) =>
+      chamar(stub.consultarEmprestimosLivro.bind(stub), { codigoLivro }),
     fechar: () => stub.close(),
   };
 }

@@ -66,6 +66,25 @@ const acoes: Record<string, Acao> = {
       ),
     );
   },
+  "Histórico do livro": async (cliente) => {
+    const { emprestimos } = await cliente.consultarEmprestimosLivro(await escolherLivro(cliente));
+    if (emprestimos.length === 0) {
+      console.log("Nenhum histórico de empréstimos encontrado para o livro");
+      return;
+    }
+    console.log(
+      tabela(
+        ["Usuário", "Nome", "Exemplar", "Emprestado em", "Devolvido em"],
+        emprestimos.map((e) => [
+          e.codigoUsuario,
+          e.nomeUsuario,
+          e.codigoExemplar,
+          e.dataEmprestimo,
+          e.dataDevolucao || "(em aberto)",
+        ]),
+      ),
+    );
+  },
   "Listar livros": async (cliente) => {
     const { livros } = await cliente.listarLivros();
     console.log(

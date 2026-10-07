@@ -41,6 +41,9 @@ export async function iniciarServidor(config: ConfiguracaoServidor): Promise<Ser
     consultarEmprestimosUsuario: unario("ConsultarEmprestimosUsuario", (req) => ({
       emprestimos: biblioteca.consultarEmprestimosUsuario(req.codigoUsuario),
     })),
+    consultarEmprestimosLivro: unario("ConsultarEmprestimosLivro", (req) => ({
+      emprestimos: biblioteca.consultarEmprestimosLivro(req.codigoLivro),
+    })),
   };
 
   const server = new grpc.Server();

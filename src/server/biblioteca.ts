@@ -154,6 +154,27 @@ export class Biblioteca {
     });
   }
 
+  consultarEmprestimosLivro(codigoLivro: string) {
+    this.buscarLivro(codigoLivro);
+    return this.db
+      .prepare(
+        `SELECT u.codigo AS codigoUsuario, u.nome AS nomeUsuario, e.codigo AS codigoExemplar,
+                a.data_emprestimo AS dataEmprestimo, COALESCE(a.data_devolucao, '') AS dataDevolucao
+         FROM emprestimo a
+         JOIN exemplar e ON e.codigo = a.codigo_exemplar
+         JOIN usuario u ON u.codigo = a.codigo_usuario
+         WHERE e.codigo_livro = ?
+         ORDER BY a.data_emprestimo DESC, a.id DESC`,
+      )
+      .all(codigoLivro) as {
+      codigoUsuario: string;
+      nomeUsuario: string;
+      codigoExemplar: string;
+      dataEmprestimo: string;
+      dataDevolucao: string;
+    }[];
+  }
+
   private buscarUsuario(codigoUsuario: string): Usuario {
     const usuario = this.db
       .prepare("SELECT codigo, nome FROM usuario WHERE codigo = ?")

@@ -30,6 +30,11 @@ service Biblioteca {
   // Erros: NOT_FOUND "Usuário não encontrado".
   rpc ConsultarEmprestimosUsuario(ConsultarEmprestimosUsuarioRequest)
       returns (ConsultarEmprestimosUsuarioResponse);
+
+  // Histórico de Empréstimos de todos os Exemplares do Livro, do mais recente para o mais antigo.
+  // Erros: NOT_FOUND "Livro não encontrado".
+  rpc ConsultarEmprestimosLivro(ConsultarEmprestimosLivroRequest)
+      returns (ConsultarEmprestimosLivroResponse);
 }
 
 message Usuario {
@@ -119,4 +124,20 @@ message EmprestimoDoUsuario {
 
 message ConsultarEmprestimosUsuarioResponse {
   repeated EmprestimoDoUsuario emprestimos = 1; // vazia se não houver Empréstimos ativos
+}
+
+message ConsultarEmprestimosLivroRequest {
+  string codigo_livro = 1;
+}
+
+message EmprestimoDoLivro {
+  string codigo_usuario = 1;
+  string nome_usuario = 2;
+  string codigo_exemplar = 3;
+  string data_emprestimo = 4;
+  string data_devolucao = 5; // vazia enquanto o Empréstimo está ativo
+}
+
+message ConsultarEmprestimosLivroResponse {
+  repeated EmprestimoDoLivro emprestimos = 1; // vazia se o Livro nunca foi emprestado
 }

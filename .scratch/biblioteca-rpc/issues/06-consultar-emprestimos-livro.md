@@ -4,11 +4,11 @@
 
 **Blocked by:** 04 (`DevolverLivro`)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `ConsultarEmprestimosLivro` no `.proto`, com código regerado
-- [ ] Inclui Empréstimos ativos (sem data de Devolução) e encerrados, de todos os Exemplares
-- [ ] Ordenado do mais recente para o mais antigo
-- [ ] Livro inexistente → `NOT_FOUND`; nunca emprestado → lista vazia
-- [ ] CLI ganha "Histórico do livro": tabela, ou "Nenhum histórico de empréstimos encontrado para o livro"
-- [ ] Testes de integração via gRPC: histórico misto ativo/encerrado em Exemplares diferentes, ordenação, lista vazia, erro
+- [x] `ConsultarEmprestimosLivro` no `.proto`, com código regerado
+- [x] Inclui Empréstimos ativos (sem data de Devolução) e encerrados, de todos os Exemplares
+- [x] Ordenado do mais recente para o mais antigo
+- [x] Livro inexistente → `NOT_FOUND`; nunca emprestado → lista vazia
+- [x] CLI ganha "Histórico do livro": tabela, ou "Nenhum histórico de empréstimos encontrado para o livro"
+- [x] Testes de integração via gRPC: histórico misto ativo/encerrado em Exemplares diferentes, ordenação, lista vazia, erro

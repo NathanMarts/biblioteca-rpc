@@ -6,6 +6,13 @@ package biblioteca;
 service Biblioteca {
   // Lista os Usuários cadastrados.
   rpc ListarUsuarios(ListarUsuariosRequest) returns (ListarUsuariosResponse);
+
+  // Lista os Livros do acervo com a disponibilidade de Exemplares.
+  rpc ListarLivros(ListarLivrosRequest) returns (ListarLivrosResponse);
+
+  // Informa se o Livro está disponível e a situação de cada Exemplar.
+  // Erros: NOT_FOUND "Livro não encontrado".
+  rpc ConsultarLivro(ConsultarLivroRequest) returns (ConsultarLivroResponse);
 }
 
 message Usuario {
@@ -13,8 +20,40 @@ message Usuario {
   string nome = 2;
 }
 
+message Livro {
+  string codigo = 1; // ex.: "L001"
+  string titulo = 2;
+  string autor = 3;
+  int32 disponiveis = 4; // Exemplares sem Empréstimo ativo
+  int32 total = 5;       // total de Exemplares
+}
+
+message Exemplar {
+  string codigo = 1;          // ex.: "L001-1"
+  bool disponivel = 2;
+  // Preenchidos apenas quando o Exemplar está emprestado:
+  string codigo_usuario = 3;
+  string nome_usuario = 4;
+  string data_emprestimo = 5; // AAAA-MM-DD
+}
+
 message ListarUsuariosRequest {}
 
 message ListarUsuariosResponse {
   repeated Usuario usuarios = 1;
+}
+
+message ListarLivrosRequest {}
+
+message ListarLivrosResponse {
+  repeated Livro livros = 1;
+}
+
+message ConsultarLivroRequest {
+  string codigo_livro = 1;
+}
+
+message ConsultarLivroResponse {
+  Livro livro = 1;
+  repeated Exemplar exemplares = 2;
 }

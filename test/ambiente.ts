@@ -1,3 +1,5 @@
+import { status } from "@grpc/grpc-js";
+import { expect } from "vitest";
 import { criarCliente, type ClienteBiblioteca } from "../src/client/cliente.js";
 import type { DadosIniciais } from "../src/server/dados.js";
 import { relogioFixo } from "../src/server/relogio.js";
@@ -31,4 +33,9 @@ export async function iniciarTeste(
       await servidor.encerrar();
     },
   };
+}
+
+/** Verifica que a chamada falhou com o status gRPC e a mensagem esperados. */
+export async function esperarErro(chamada: Promise<unknown>, codigo: status, mensagem: string) {
+  await expect(chamada).rejects.toMatchObject({ code: codigo, details: mensagem });
 }

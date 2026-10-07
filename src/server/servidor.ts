@@ -3,6 +3,7 @@ import { BibliotecaService, type BibliotecaServer } from "../generated/bibliotec
 import { Biblioteca } from "./biblioteca.js";
 import type { DadosIniciais } from "./dados.js";
 import { abrirBanco } from "./db.js";
+import { ErroBiblioteca, type TipoErro } from "./erros.js";
 import type { Relogio } from "./relogio.js";
 
 export interface ConfiguracaoServidor {
@@ -29,6 +30,8 @@ export async function iniciarServidor(config: ConfiguracaoServidor): Promise<Ser
 
   const implementacao: BibliotecaServer = {
     listarUsuarios: unario("ListarUsuarios", () => ({ usuarios: biblioteca.listarUsuarios() })),
+    listarLivros: unario("ListarLivros", () => ({ livros: biblioteca.listarLivros() })),
+    consultarLivro: unario("ConsultarLivro", (req) => biblioteca.consultarLivro(req.codigoLivro)),
   };
 
   const server = new grpc.Server();
@@ -53,17 +56,34 @@ export async function iniciarServidor(config: ConfiguracaoServidor): Promise<Ser
   };
 }
 
-/** Converte uma função síncrona em handler gRPC unário, registrando a chamada. */
+const STATUS_POR_TIPO: Record<TipoErro, grpc.status> = {
+  NAO_ENCONTRADO: grpc.status.NOT_FOUND,
+  ARGUMENTO_INVALIDO: grpc.status.INVALID_ARGUMENT,
+  PRECONDICAO: grpc.status.FAILED_PRECONDITION,
+};
+
+/**
+ * Converte uma função síncrona em handler gRPC unário: registra a chamada e traduz
+ * ErroBiblioteca para o status code correspondente, com a mensagem em português.
+ */
 function criarAdaptador(log: boolean) {
   return <Req, Res>(nome: string, executar: (requisicao: Req) => Res): grpc.handleUnaryCall<Req, Res> =>
     (call, callback) => {
+      const registrar = (resultado: string) => {
+        if (log) console.log(`[RPC] ${nome} ${JSON.stringify(call.request)} → ${resultado}`);
+      };
       try {
         const resposta = executar(call.request);
-        if (log) console.log(`[RPC] ${nome} ${JSON.stringify(call.request)} → ok`);
+        registrar("ok");
         callback(null, resposta);
       } catch (erro) {
-        if (log) console.log(`[RPC] ${nome} ${JSON.stringify(call.request)} → erro: ${String(erro)}`);
-        callback({ code: grpc.status.INTERNAL, details: String(erro) });
+        if (erro instanceof ErroBiblioteca) {
+          registrar(`${grpc.status[STATUS_POR_TIPO[erro.tipo]]} "${erro.message}"`);
+          callback({ code: STATUS_POR_TIPO[erro.tipo], details: erro.message });
+        } else {
+          registrar(`INTERNAL ${String(erro)}`);
+          callback({ code: grpc.status.INTERNAL, details: "Erro interno do servidor" });
+        }
       }
     };
 }

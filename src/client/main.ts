@@ -1,12 +1,43 @@
 import { status, type ServiceError } from "@grpc/grpc-js";
 import { select } from "@inquirer/prompts";
 import { ENDERECO } from "../config.js";
+import type { Exemplar } from "../generated/biblioteca.js";
 import { criarCliente, type ClienteBiblioteca } from "./cliente.js";
 import { tabela } from "./tabela.js";
 
 type Acao = (cliente: ClienteBiblioteca) => Promise<void>;
 
+async function escolherLivro(cliente: ClienteBiblioteca): Promise<string> {
+  const { livros } = await cliente.listarLivros();
+  return select({
+    message: "Livro:",
+    choices: livros.map((l) => ({ name: `${l.codigo}  ${l.titulo} (${l.disponiveis}/${l.total})`, value: l.codigo })),
+    pageSize: 12,
+  });
+}
+
+function situacaoDoExemplar(e: Exemplar): string {
+  return e.disponivel
+    ? "Disponível"
+    : `Emprestado para ${e.nomeUsuario} (${e.codigoUsuario}) desde ${e.dataEmprestimo}`;
+}
+
 const acoes: Record<string, Acao> = {
+  "Listar livros": async (cliente) => {
+    const { livros } = await cliente.listarLivros();
+    console.log(
+      tabela(
+        ["Código", "Título", "Autor", "Disponíveis"],
+        livros.map((l) => [l.codigo, l.titulo, l.autor, `${l.disponiveis} de ${l.total}`]),
+      ),
+    );
+  },
+  "Consultar livro": async (cliente) => {
+    const { livro, exemplares } = await cliente.consultarLivro(await escolherLivro(cliente));
+    console.log(`\n${livro!.titulo} — ${livro!.autor}`);
+    console.log(`${livro!.disponiveis} de ${livro!.total} exemplares disponíveis\n`);
+    console.log(tabela(["Exemplar", "Situação"], exemplares.map((e) => [e.codigo, situacaoDoExemplar(e)])));
+  },
   "Listar usuários": async (cliente) => {
     const { usuarios } = await cliente.listarUsuarios();
     console.log(tabela(["Código", "Nome"], usuarios.map((u) => [u.codigo, u.nome])));

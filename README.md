@@ -4,14 +4,18 @@ Sistema de empréstimo de livros no paradigma **cliente/servidor com RPC**, feit
 
 - **Servidor:** expõe a API via **gRPC** e guarda os dados em **SQLite**.
 - **Cliente:** um programa de linha de comando que funciona como o balcão do bibliotecário. Tem um menu com uma opção para cada função da API.
+- **Segurança:** conexão criptografada com **TLS** e login do bibliotecário, verificado por um **interceptador** (middleware) do gRPC.
 - **Linguagem:** tudo em **TypeScript**, rodando em Node.js.
 
 ```
-┌──────────────┐   gRPC (HTTP/2 + Protocol Buffers)   ┌────────────────────┐     ┌─────────────┐
-│ Cliente CLI  │ ───────────────────────────────────▶ │ Servidor Biblioteca│ ──▶ │ SQLite      │
-│ (bibliotecá- │ ◀─────────────────────────────────── │ regras de negócio  │     │ biblioteca. │
-│  rio)        │      respostas ou status de erro     └────────────────────┘     │ db          │
-└──────────────┘                                                                 └─────────────┘
+Cliente CLI      token de sessão + chave de idempotência + novas tentativas
+    │
+    │  gRPC sobre TLS (HTTP/2 + Protocol Buffers)
+    ▼
+Servidor         interceptadores: log → autenticação
+    │            handler: idempotência → regras de negócio
+    ▼
+SQLite           transações IMMEDIATE, um arquivo
 ```
 
 ## Sumário
@@ -21,6 +25,7 @@ Sistema de empréstimo de livros no paradigma **cliente/servidor com RPC**, feit
 - [Modelo do domínio](#modelo-do-domínio)
 - [API](#api)
 - [Exemplos de uso](#exemplos-de-uso)
+- [Conceitos de Sistemas Distribuídos no projeto](#conceitos-de-sistemas-distribuídos-no-projeto)
 - [Justificativas das escolhas](#justificativas-das-escolhas)
 - [Estrutura do projeto](#estrutura-do-projeto)
 
@@ -33,9 +38,11 @@ Sistema de empréstimo de livros no paradigma **cliente/servidor com RPC**, feit
 git clone https://github.com/NathanMarts/biblioteca-rpc.git
 cd biblioteca-rpc
 npm install
+npm run certificados
 ```
 
-O `protoc` não precisa estar instalado: o código gerado a partir do `.proto` já está no repositório.
+- O `protoc` não precisa estar instalado: o código gerado a partir do `.proto` já está no repositório.
+- `npm run certificados` gera o certificado TLS autoassinado em `certs/`. Ele fica fora do git, porque a chave privada não pode ir para um repositório público.
 
 ## Como rodar
 
@@ -49,10 +56,13 @@ npm run servidor
 npm run cliente
 ```
 
+Ao abrir, o cliente pede o login do bibliotecário. Nos dados de demonstração, use **login `beatriz`** e **senha `biblioteca`**. Deixar o login vazio segue sem sessão: nesse modo só as consultas públicas funcionam.
+
 | Comando | O que faz |
 |---|---|
-| `npm run servidor` | Sobe o servidor gRPC. Na primeira execução, cria o banco com os dados de demonstração. |
+| `npm run servidor` | Sobe o servidor gRPC com TLS. Na primeira execução, cria o banco com os dados de demonstração. |
 | `npm run cliente` | Abre o menu interativo do cliente. Navegue com as setas, confirme com Enter e use Esc (ou Backspace, nas listas) para voltar ao menu. |
+| `npm run certificados` | Gera o certificado TLS do servidor em `certs/`. Aceita hosts ou IPs extras (veja abaixo). |
 | `npm run reset` | Apaga o banco e o recria com os dados de demonstração. Rode com o servidor parado. |
 | `npm test` | Roda os testes automatizados. |
 | `npm run typecheck` | Verifica os tipos do TypeScript. |
@@ -68,14 +78,22 @@ Tudo é configurado por variáveis de ambiente, todas opcionais:
 | `BIBLIOTECA_PORTA` | `50051` | Porta do servidor. |
 | `BIBLIOTECA_BANCO` | `biblioteca.db` | Arquivo SQLite usado pelo servidor e pelo `reset`. |
 | `BIBLIOTECA_HOJE` | data do sistema | Fixa a data de "hoje" do servidor (`AAAA-MM-DD`), útil para demonstrar atrasos. Um valor inválido impede o servidor de subir. |
+| `BIBLIOTECA_TLS` | ligado | `desligado` desativa o TLS (só para depuração). |
+| `BIBLIOTECA_CERTIFICADO` | `certs/servidor.crt` | Certificado do servidor, usado pelo servidor e pelo cliente. |
+| `BIBLIOTECA_CHAVE` | `certs/servidor.key` | Chave privada do servidor (só o servidor usa). |
 
-Para rodar em máquinas diferentes, suba o servidor com `BIBLIOTECA_HOST=0.0.0.0` e aponte o cliente para o IP da máquina do servidor:
+Para rodar em máquinas diferentes:
+1. Gere o certificado incluindo o IP da máquina do servidor.
+2. Copie `certs/servidor.crt` para a máquina do cliente. A chave privada fica só no servidor.
+3. Suba o servidor com `BIBLIOTECA_HOST=0.0.0.0` e aponte o cliente para esse IP:
 
 ```bash
+# Na máquina do servidor
+npm run certificados -- 192.168.0.10
 # PowerShell
+$env:BIBLIOTECA_HOST="0.0.0.0"; npm run servidor
+# Na máquina do cliente (com certs/servidor.crt copiado)
 $env:BIBLIOTECA_HOST="192.168.0.10"; npm run cliente
-# bash
-BIBLIOTECA_HOST=192.168.0.10 npm run cliente
 ```
 
 ## Modelo do domínio
@@ -97,8 +115,30 @@ O contrato completo, com comentários, está em [proto/biblioteca.proto](proto/b
 - **Datas:** strings no formato `AAAA-MM-DD`.
 - **Erros:** são sinalizados pelo **status code do gRPC**, com a mensagem em português no campo `details`.
 - **Consultas sem resultado:** retornam **lista vazia**, não erro. O cliente exibe a mensagem correspondente.
+- **Autenticação:** as funções protegidas exigem o metadado `authorization: Bearer <token>`, com o token devolvido por `Entrar`.
+- **Idempotência:** `RealizarEmprestimo` e `DevolverLivro` aceitam o metadado `chave-idempotencia`. Uma repetição com a mesma chave recebe a mesma resposta, sem aplicar a operação de novo. O cliente envia um UUID novo por operação.
 
-As cinco funções do enunciado foram mantidas, com os nomes no padrão PascalCase do protobuf. As três RPCs no fim da seção são extras, além do que o enunciado pede: as listagens permitem que o cliente ofereça listas de seleção em vez de pedir que o operador digite códigos, e `ObterHoje` fornece a data padrão do empréstimo.
+As cinco funções do enunciado foram mantidas, com os nomes no padrão PascalCase do protobuf. As RPCs no fim da seção são extras, além do que o enunciado pede:
+- `Entrar` autentica o bibliotecário.
+- As listagens permitem que o cliente ofereça listas de seleção em vez de pedir que o operador digite códigos.
+- `ObterHoje` fornece a data padrão do empréstimo.
+
+### Funções públicas e protegidas
+
+Um interceptador do servidor exige sessão em **todas** as funções, exceto as públicas. Ele nega por padrão: uma função nova já nasce protegida.
+
+| Função | Acesso |
+|---|---|
+| `Entrar`, `ObterHoje`, `ListarLivros` | Pública |
+| `ConsultarLivro` | Pública, mas sem sessão não mostra quem está com cada Exemplar |
+| `RealizarEmprestimo`, `DevolverLivro`, `ListarUsuarios`, `ConsultarEmprestimosUsuario`, `ConsultarEmprestimosLivro` | Exige sessão |
+
+| Situação | Status gRPC | Mensagem |
+|---|---|---|
+| Função protegida sem token, ou com token que o servidor não emitiu | `UNAUTHENTICATED` | Não autenticado |
+| Sessão com mais de 8 horas | `UNAUTHENTICATED` | Sessão expirada |
+| Login ou senha errados em `Entrar` | `UNAUTHENTICATED` | Login ou senha inválidos |
+| Chave de idempotência já usada em outra operação | `INVALID_ARGUMENT` | Chave de idempotência já usada em outra operação |
 
 ### `RealizarEmprestimo(codigo_usuario, codigo_livro, data_emprestimo)`
 
@@ -159,8 +199,9 @@ Mostra o histórico de Empréstimos de **todos os Exemplares** do Livro, do mais
 
 **Erro:** `NOT_FOUND` "Livro não encontrado".
 
-### Extras: `ListarLivros()`, `ListarUsuarios()` e `ObterHoje()`
+### Extras: `Entrar()`, `ListarLivros()`, `ListarUsuarios()` e `ObterHoje()`
 
+- `Entrar(login, senha)` retorna `token`, `nome` e `expira_em` (data e hora ISO 8601). A sessão dura 8 horas.
 - `ListarLivros` retorna código, título, autor, `disponiveis` e `total` de cada Livro.
 - `ListarUsuarios` retorna código e nome de cada Usuário.
 - `ObterHoje` retorna a data de hoje do servidor (`data`). O cliente usa essa data para pré-preencher o empréstimo, então a data padrão sempre segue o relógio do servidor, mesmo com `BIBLIOTECA_HOJE` definida só no servidor.
@@ -169,12 +210,16 @@ Mostra o histórico de Empréstimos de **todos os Exemplares** do Livro, do mais
 
 As saídas abaixo foram geradas com os dados de demonstração e `BIBLIOTECA_HOJE=2026-10-20`.
 
-### Menu do cliente
+### Login e menu do cliente
 
 ```
 Biblioteca — balcão do bibliotecário (servidor: localhost:50051)
 
-? O que deseja fazer? (Use arrow keys)
+✔ Login do bibliotecário (vazio para seguir sem login): beatriz
+✔ Senha: **********
+✔ Bem-vindo(a), Beatriz Rocha.
+
+? O que deseja fazer, Beatriz Rocha? (Use arrow keys)
 ❯ Realizar empréstimo
   Devolver livro
   Empréstimos do usuário
@@ -182,7 +227,14 @@ Biblioteca — balcão do bibliotecário (servidor: localhost:50051)
   Listar livros
   Consultar livro
   Listar usuários
+  Sair da sessão (Beatriz Rocha)
   Sair
+```
+
+Sem login, as funções protegidas respondem:
+
+```
+✖ Não autenticado. Escolha "Entrar" no menu para fazer login.
 ```
 
 ### Listar livros
@@ -246,9 +298,11 @@ Devolver livro       (U003, L009)              ✖ Empréstimo não encontrado
 O servidor registra cada chamada recebida, o que ajuda a ver a comunicação RPC acontecendo:
 
 ```
-Servidor da Biblioteca escutando em localhost:50051
+Servidor da Biblioteca escutando em localhost:50051 (TLS)
 Banco: biblioteca.db | Hoje: 2026-10-20
 [RPC] ListarLivros {} → ok
+[RPC] ListarUsuarios {} → UNAUTHENTICATED "Não autenticado"
+[RPC] Entrar {"login":"beatriz","senha":"***"} → ok
 [RPC] RealizarEmprestimo {"codigoUsuario":"U003","codigoLivro":"L001","dataEmprestimo":"2026-10-20"} → ok
 [RPC] RealizarEmprestimo {"codigoUsuario":"U001","codigoLivro":"L005","dataEmprestimo":"2026-10-20"} → FAILED_PRECONDITION "Usuário com limite de empréstimos atingido"
 [RPC] DevolverLivro {"codigoUsuario":"U003","codigoLivro":"L009"} → NOT_FOUND "Empréstimo não encontrado"
@@ -259,13 +313,28 @@ Banco: biblioteca.db | Hoje: 2026-10-20
 O cliente tipado em [src/client/cliente.ts](src/client/cliente.ts) pode ser usado por qualquer programa TypeScript:
 
 ```ts
+import { readFileSync } from "node:fs";
 import { criarCliente } from "./src/client/cliente.js";
 
-const biblioteca = criarCliente("localhost:50051");
+const biblioteca = criarCliente("localhost:50051", {
+  certificado: readFileSync("certs/servidor.crt", "utf8"),
+});
+await biblioteca.entrar("beatriz", "biblioteca");
 const { codigoExemplar, dataLimite } = await biblioteca.realizarEmprestimo("U003", "L001", "2026-10-20");
 console.log(`Emprestado ${codigoExemplar}, devolver até ${dataLimite}`);
 biblioteca.fechar();
 ```
+
+## Conceitos de Sistemas Distribuídos no projeto
+
+| Tema | Como aparece no projeto | O que ficou de fora, e por quê |
+|---|---|---|
+| **Comunicação** | RPC com gRPC. A interface é descrita numa IDL (`.proto`), os stubs são gerados, a serialização é em Protocol Buffers sobre HTTP/2, e as chamadas são de requisição e resposta síncronas, com tempo limite. O gRPC é o middleware que dá **transparência de acesso**: as chamadas remotas parecem locais. | Comunicação orientada a mensagens (filas). Toda operação espera a resposta na hora, então requisição e resposta síncronas são o modelo adequado. |
+| **Nomeação** | Identificadores únicos e planos para as entidades (`L001`, `L001-1`, `U001`). O servidor é localizado por um endereço configurável (`host:porta`), e o certificado TLS vincula esse nome à identidade do servidor. | Um serviço de nomes ou de descoberta. Com um servidor só, um endereço configurado basta. |
+| **Sincronização** | O servidor é a **referência de tempo única**. `ObterHoje` é próximo do algoritmo de Cristian: o cliente consulta o relógio do servidor, sem compensar a latência, o que não importa porque a resolução é de um dia. **Exclusão mútua centralizada:** transações `IMMEDIATE` no SQLite e um índice único garantem que um exemplar nunca seja emprestado duas vezes, mesmo com dois processos servidores no mesmo banco. | Relógios lógicos (Lamport, vetoriais), porque não há eventos entre vários processos para ordenar. |
+| **Replicação e consistência** | Consistência forte por ser centralizado: uma cópia dos dados, e toda escrita é validada no servidor. Exemplo de dado desatualizado no cliente: uma lista carregada antes de outro cliente devolver o livro. O servidor revalida e responde "Livro já devolvido". | Réplicas do servidor ou do banco. Exigiriam um protocolo de consistência (primário e cópia, quórum) que vai além do foco em RPC. |
+| **Tolerância a falhas** | Transações atômicas, então uma queda no meio não corrompe nada. Persistência em disco. Tempo limite nas chamadas. **Novas tentativas automáticas** quando o servidor está indisponível, com **chave de idempotência** nas escritas para que uma repetição nunca aplique a operação duas vezes (o efeito é parecido com a semântica de "no máximo uma vez"). | Redundância. O servidor continua sendo um ponto único de falha, e sem réplicas não há para onde redirecionar. |
+| **Segurança** | Canal confidencial e autenticado com **TLS**. **Autenticação** do bibliotecário com senha em hash (scrypt) e sessão de 8 horas. **Controle de acesso** por um interceptador que nega por padrão, mais autorização mais fina em `ConsultarLivro`. Validação de toda entrada no servidor. | Certificado de uma autoridade pública e níveis diferentes de permissão entre bibliotecários. |
 
 ## Justificativas das escolhas
 
@@ -288,8 +357,17 @@ As decisões que têm alternativas relevantes estão registradas como ADRs em [d
   - Mesmo assim, é transacional e os dados persistem entre reinícios.
 - **Concorrência.**
   - Vários clientes podem acessar o servidor ao mesmo tempo.
-  - Cada operação de escrita (empréstimo e devolução) roda dentro de uma **transação**. Como o driver é síncrono e o Node executa um handler por vez, a verificação "há Exemplar disponível?" e a gravação do Empréstimo são atômicas.
-  - Por isso, dois clientes nunca conseguem pegar o último Exemplar ao mesmo tempo.
+  - Cada operação de escrita (empréstimo e devolução) roda dentro de uma **transação `IMMEDIATE`**, que pega o lock de escrita antes de ler a disponibilidade. Além disso, um **índice único** no banco impede dois Empréstimos ativos do mesmo Exemplar.
+  - Por isso, dois clientes nunca conseguem pegar o último Exemplar ao mesmo tempo, mesmo com dois processos servidores usando o mesmo arquivo de banco. Um teste de estresse com 1000 disputas simultâneas confirmou isso.
+- **Autenticação por interceptador** ([ADR 0004](docs/adr/0004-autenticacao-por-interceptador.md)).
+  - A regra "precisa estar logado" vale para quase todas as funções, então fica num único interceptador do gRPC (o middleware dele), não espalhada pelos handlers.
+  - Ele nega por padrão, para que uma função nova não nasça aberta por esquecimento.
+- **TLS com certificado autoassinado** ([ADR 0005](docs/adr/0005-tls-com-certificado-autoassinado.md)).
+  - Sem TLS, a senha e o token trafegariam em texto puro.
+  - O certificado é gerado localmente e fica fora do git, porque a chave privada não pode ir para um repositório público.
+- **Novas tentativas com idempotência** ([ADR 0006](docs/adr/0006-novas-tentativas-com-idempotencia.md)).
+  - O cliente usa a política de retry nativa do gRPC.
+  - A chave de idempotência torna seguro repetir empréstimos e devoluções. Sem ela, a repetição de uma devolução bem-sucedida responderia "Livro já devolvido", um erro falso.
 - **"Hoje" controlado pelo servidor.**
   - A situação de atraso, a data de devolução e a data padrão do empréstimo (via `ObterHoje`) usam a data do servidor, não a do cliente. Isso evita que relógios diferentes entre máquinas gerem resultados inconsistentes.
   - A variável `BIBLIOTECA_HOJE` permite fixar essa data para demonstrações.
@@ -297,7 +375,7 @@ As decisões que têm alternativas relevantes estão registradas como ADRs em [d
   - O enunciado aceita interface texto, e os menus navegáveis e as listas de seleção evitam erros de digitação de códigos.
   - Cada chamada tem um tempo limite de 5 segundos, para o cliente não travar se o servidor não responder.
 - **Testes.**
-  - Os testes automatizados (`vitest`) sobem um **servidor gRPC real** numa porta aleatória, com banco em memória e data fixa, e chamam a API pelo mesmo cliente que o CLI usa.
+  - Os testes automatizados (`vitest`) sobem um **servidor gRPC real com TLS** numa porta aleatória, com banco em memória e data fixa, e chamam a API pelo mesmo cliente que o CLI usa.
   - Assim, toda regra de negócio é verificada de ponta a ponta, pela fronteira RPC.
 
 ## Estrutura do projeto
@@ -305,8 +383,10 @@ As decisões que têm alternativas relevantes estão registradas como ADRs em [d
 ```
 proto/biblioteca.proto   Contrato da API (IDL)
 src/generated/           Código gerado pelo ts-proto (não editar)
-src/server/              Servidor: regras (biblioteca.ts), gRPC (servidor.ts), banco, seed, relógio
-src/client/              Cliente: wrapper tipado (cliente.ts) e CLI (main.ts)
+src/server/              Servidor: regras (biblioteca.ts), gRPC (servidor.ts), interceptadores,
+                         autenticação, idempotência, banco, seed, relógio
+src/client/              Cliente: wrapper tipado com token e retry (cliente.ts) e CLI (main.ts)
+src/certificados.ts      Geração do certificado TLS (usado por npm run certificados e testes)
 test/                    Testes de integração via gRPC
 docs/adr/                Registros de decisões de arquitetura
 CONTEXT.md               Glossário do domínio

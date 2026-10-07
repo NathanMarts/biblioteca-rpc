@@ -21,6 +21,14 @@ Um Exemplar está disponível quando não tem Empréstimo ativo. Um Livro está 
 Pessoa cadastrada na biblioteca que pode pegar Exemplares emprestados, identificada por um código curto (ex.: `U001`).
 _Evitar_: Leitor, cliente, membro
 
+**Bibliotecário**:
+Quem opera o balcão e chama as funções que alteram dados ou mostram dados pessoais; entra com login e senha.
+_Evitar_: Operador, administrador, atendente
+
+**Sessão**:
+O período, a partir de quando um Bibliotecário entra, em que ele pode usar as funções protegidas sem informar a senha de novo (8 horas).
+_Evitar_: Login (como substantivo), conexão
+
 ### Empréstimos
 
 **Empréstimo**:

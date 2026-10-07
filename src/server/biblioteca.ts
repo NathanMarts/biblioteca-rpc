@@ -1,4 +1,3 @@
-import { Situacao } from "../generated/biblioteca.js";
 import type { Db } from "./db.js";
 import { ehDataValida, somarDias } from "./datas.js";
 import { argumentoInvalido, naoEncontrado, precondicao } from "./erros.js";
@@ -25,6 +24,24 @@ export interface Exemplar {
   dataEmprestimo: string;
 }
 
+export interface EmprestimoDoUsuario {
+  codigoLivro: string;
+  titulo: string;
+  codigoExemplar: string;
+  dataEmprestimo: string;
+  dataLimite: string;
+  atrasado: boolean;
+}
+
+export interface EmprestimoDoLivro {
+  codigoUsuario: string;
+  nomeUsuario: string;
+  codigoExemplar: string;
+  dataEmprestimo: string;
+  /** Vazia enquanto o Empréstimo está ativo. */
+  dataDevolucao: string;
+}
+
 /** Dias que um Exemplar pode ficar com o Usuário sem Atraso. */
 export const PRAZO_EM_DIAS = 7;
 
@@ -32,19 +49,19 @@ export const PRAZO_EM_DIAS = 7;
 export const LIMITE_DE_EMPRESTIMOS = 3;
 
 const SELECT_LIVRO = `
-  SELECT l.codigo, l.titulo, l.autor,
-         COUNT(e.codigo) AS total,
-         COUNT(e.codigo) - COUNT(ativo.id) AS disponiveis
-  FROM livro l
-  JOIN exemplar e ON e.codigo_livro = l.codigo
-  LEFT JOIN emprestimo ativo ON ativo.codigo_exemplar = e.codigo AND ativo.data_devolucao IS NULL
+  SELECT livro.codigo, livro.titulo, livro.autor,
+         COUNT(exemplar.codigo) AS total,
+         COUNT(exemplar.codigo) - COUNT(ativo.id) AS disponiveis
+  FROM livro
+  LEFT JOIN exemplar ON exemplar.codigo_livro = livro.codigo
+  LEFT JOIN emprestimo_ativo ativo ON ativo.codigo_exemplar = exemplar.codigo
 `;
 
 /** Regras de negócio da biblioteca, independentes do transporte (gRPC). */
 export class Biblioteca {
   constructor(
     private readonly db: Db,
-    private readonly hoje: Relogio,
+    private readonly relogio: Relogio,
   ) {}
 
   listarUsuarios(): Usuario[] {
@@ -53,7 +70,7 @@ export class Biblioteca {
 
   listarLivros(): Livro[] {
     return this.db
-      .prepare(`${SELECT_LIVRO} GROUP BY l.codigo ORDER BY l.codigo`)
+      .prepare(`${SELECT_LIVRO} GROUP BY livro.codigo ORDER BY livro.codigo`)
       .all() as Livro[];
   }
 
@@ -61,16 +78,16 @@ export class Biblioteca {
     const livro = this.buscarLivro(codigoLivro);
     const exemplares = this.db
       .prepare(
-        `SELECT e.codigo,
+        `SELECT exemplar.codigo,
                 ativo.id IS NULL AS disponivel,
-                COALESCE(u.codigo, '') AS codigoUsuario,
-                COALESCE(u.nome, '') AS nomeUsuario,
+                COALESCE(usuario.codigo, '') AS codigoUsuario,
+                COALESCE(usuario.nome, '') AS nomeUsuario,
                 COALESCE(ativo.data_emprestimo, '') AS dataEmprestimo
-         FROM exemplar e
-         LEFT JOIN emprestimo ativo ON ativo.codigo_exemplar = e.codigo AND ativo.data_devolucao IS NULL
-         LEFT JOIN usuario u ON u.codigo = ativo.codigo_usuario
-         WHERE e.codigo_livro = ?
-         ORDER BY e.numero`,
+         FROM exemplar
+         LEFT JOIN emprestimo_ativo ativo ON ativo.codigo_exemplar = exemplar.codigo
+         LEFT JOIN usuario ON usuario.codigo = ativo.codigo_usuario
+         WHERE exemplar.codigo_livro = ?
+         ORDER BY exemplar.numero`,
       )
       .all(codigoLivro) as (Omit<Exemplar, "disponivel"> & { disponivel: number })[];
     return { livro, exemplares: exemplares.map((e) => ({ ...e, disponivel: e.disponivel === 1 })) };
@@ -80,7 +97,7 @@ export class Biblioteca {
     const emprestar = this.db.transaction(() => {
       this.buscarUsuario(codigoUsuario);
       this.buscarLivro(codigoLivro);
-      if (!ehDataValida(dataEmprestimo) || dataEmprestimo > this.hoje()) {
+      if (!ehDataValida(dataEmprestimo) || dataEmprestimo > this.relogio()) {
         throw argumentoInvalido("Data inválida");
       }
       if (this.emprestimoAtivo(codigoUsuario, codigoLivro)) {
@@ -89,13 +106,13 @@ export class Biblioteca {
       if (this.contarEmprestimosAtivos(codigoUsuario) >= LIMITE_DE_EMPRESTIMOS) {
         throw precondicao("Usuário com limite de empréstimos atingido");
       }
+      // Exemplar disponível de menor número (L001-2 antes de L001-10).
       const exemplar = this.db
         .prepare(
-          `SELECT e.codigo FROM exemplar e
-           WHERE e.codigo_livro = ?
-             AND NOT EXISTS (SELECT 1 FROM emprestimo a
-                             WHERE a.codigo_exemplar = e.codigo AND a.data_devolucao IS NULL)
-           ORDER BY e.numero LIMIT 1`,
+          `SELECT exemplar.codigo FROM exemplar
+           LEFT JOIN emprestimo_ativo ativo ON ativo.codigo_exemplar = exemplar.codigo
+           WHERE exemplar.codigo_livro = ? AND ativo.id IS NULL
+           ORDER BY exemplar.numero LIMIT 1`,
         )
         .get(codigoLivro) as { codigo: string } | undefined;
       if (!exemplar) throw precondicao("Livro indisponível");
@@ -119,60 +136,57 @@ export class Biblioteca {
       this.buscarLivro(codigoLivro);
       const ativo = this.emprestimoAtivo(codigoUsuario, codigoLivro);
       if (!ativo) {
-        const jaTeve = this.db
+        const jaTeveEmprestimo = this.db
           .prepare(
-            `SELECT 1 FROM emprestimo a JOIN exemplar e ON e.codigo = a.codigo_exemplar
-             WHERE a.codigo_usuario = ? AND e.codigo_livro = ?`,
+            `SELECT 1 FROM emprestimo JOIN exemplar ON exemplar.codigo = emprestimo.codigo_exemplar
+             WHERE emprestimo.codigo_usuario = ? AND exemplar.codigo_livro = ?`,
           )
           .get(codigoUsuario, codigoLivro);
-        throw jaTeve ? precondicao("Livro já devolvido") : naoEncontrado("Empréstimo não encontrado");
+        throw jaTeveEmprestimo
+          ? precondicao("Livro já devolvido")
+          : naoEncontrado("Empréstimo não encontrado");
       }
-      const dataDevolucao = this.hoje();
+      const dataDevolucao = this.relogio();
       this.db.prepare("UPDATE emprestimo SET data_devolucao = ? WHERE id = ?").run(dataDevolucao, ativo.id);
       return { codigoExemplar: ativo.codigoExemplar, dataDevolucao };
     });
     return devolver();
   }
 
-  consultarEmprestimosUsuario(codigoUsuario: string) {
+  consultarEmprestimosUsuario(codigoUsuario: string): EmprestimoDoUsuario[] {
     this.buscarUsuario(codigoUsuario);
     const ativos = this.db
       .prepare(
-        `SELECT l.codigo AS codigoLivro, l.titulo, e.codigo AS codigoExemplar,
-                a.data_emprestimo AS dataEmprestimo
-         FROM emprestimo a
-         JOIN exemplar e ON e.codigo = a.codigo_exemplar
-         JOIN livro l ON l.codigo = e.codigo_livro
-         WHERE a.codigo_usuario = ? AND a.data_devolucao IS NULL
-         ORDER BY a.data_emprestimo, e.codigo`,
+        `SELECT livro.codigo AS codigoLivro, livro.titulo, exemplar.codigo AS codigoExemplar,
+                ativo.data_emprestimo AS dataEmprestimo
+         FROM emprestimo_ativo ativo
+         JOIN exemplar ON exemplar.codigo = ativo.codigo_exemplar
+         JOIN livro ON livro.codigo = exemplar.codigo_livro
+         WHERE ativo.codigo_usuario = ?
+         ORDER BY ativo.data_emprestimo, exemplar.codigo`,
       )
-      .all(codigoUsuario) as { codigoLivro: string; titulo: string; codigoExemplar: string; dataEmprestimo: string }[];
-    const hoje = this.hoje();
-    return ativos.map((a) => {
-      const dataLimite = somarDias(a.dataEmprestimo, PRAZO_EM_DIAS);
-      return { ...a, dataLimite, situacao: hoje > dataLimite ? Situacao.ATRASADO : Situacao.NO_PRAZO };
+      .all(codigoUsuario) as Omit<EmprestimoDoUsuario, "dataLimite" | "atrasado">[];
+    const hoje = this.relogio();
+    return ativos.map((emprestimo) => {
+      const dataLimite = somarDias(emprestimo.dataEmprestimo, PRAZO_EM_DIAS);
+      return { ...emprestimo, dataLimite, atrasado: hoje > dataLimite };
     });
   }
 
-  consultarEmprestimosLivro(codigoLivro: string) {
+  consultarEmprestimosLivro(codigoLivro: string): EmprestimoDoLivro[] {
     this.buscarLivro(codigoLivro);
     return this.db
       .prepare(
-        `SELECT u.codigo AS codigoUsuario, u.nome AS nomeUsuario, e.codigo AS codigoExemplar,
-                a.data_emprestimo AS dataEmprestimo, COALESCE(a.data_devolucao, '') AS dataDevolucao
-         FROM emprestimo a
-         JOIN exemplar e ON e.codigo = a.codigo_exemplar
-         JOIN usuario u ON u.codigo = a.codigo_usuario
-         WHERE e.codigo_livro = ?
-         ORDER BY a.data_emprestimo DESC, a.id DESC`,
+        `SELECT usuario.codigo AS codigoUsuario, usuario.nome AS nomeUsuario,
+                exemplar.codigo AS codigoExemplar, emprestimo.data_emprestimo AS dataEmprestimo,
+                COALESCE(emprestimo.data_devolucao, '') AS dataDevolucao
+         FROM emprestimo
+         JOIN exemplar ON exemplar.codigo = emprestimo.codigo_exemplar
+         JOIN usuario ON usuario.codigo = emprestimo.codigo_usuario
+         WHERE exemplar.codigo_livro = ?
+         ORDER BY emprestimo.data_emprestimo DESC, emprestimo.id DESC`,
       )
-      .all(codigoLivro) as {
-      codigoUsuario: string;
-      nomeUsuario: string;
-      codigoExemplar: string;
-      dataEmprestimo: string;
-      dataDevolucao: string;
-    }[];
+      .all(codigoLivro) as EmprestimoDoLivro[];
   }
 
   private buscarUsuario(codigoUsuario: string): Usuario {
@@ -183,31 +197,29 @@ export class Biblioteca {
     return usuario;
   }
 
+  private buscarLivro(codigoLivro: string): Livro {
+    const livro = this.db
+      .prepare(`${SELECT_LIVRO} WHERE livro.codigo = ? GROUP BY livro.codigo`)
+      .get(codigoLivro) as Livro | undefined;
+    if (!livro) throw naoEncontrado("Livro não encontrado");
+    return livro;
+  }
+
   /** O Empréstimo ativo do Usuário para algum Exemplar do Livro, se houver. */
   private emprestimoAtivo(codigoUsuario: string, codigoLivro: string) {
     return this.db
       .prepare(
-        `SELECT a.id, a.codigo_exemplar AS codigoExemplar
-         FROM emprestimo a JOIN exemplar e ON e.codigo = a.codigo_exemplar
-         WHERE a.codigo_usuario = ? AND e.codigo_livro = ? AND a.data_devolucao IS NULL`,
+        `SELECT ativo.id, ativo.codigo_exemplar AS codigoExemplar
+         FROM emprestimo_ativo ativo JOIN exemplar ON exemplar.codigo = ativo.codigo_exemplar
+         WHERE ativo.codigo_usuario = ? AND exemplar.codigo_livro = ?`,
       )
       .get(codigoUsuario, codigoLivro) as { id: number; codigoExemplar: string } | undefined;
   }
 
   private contarEmprestimosAtivos(codigoUsuario: string): number {
     const { total } = this.db
-      .prepare(
-        "SELECT COUNT(*) AS total FROM emprestimo WHERE codigo_usuario = ? AND data_devolucao IS NULL",
-      )
+      .prepare("SELECT COUNT(*) AS total FROM emprestimo_ativo WHERE codigo_usuario = ?")
       .get(codigoUsuario) as { total: number };
     return total;
-  }
-
-  private buscarLivro(codigoLivro: string): Livro {
-    const livro = this.db
-      .prepare(`${SELECT_LIVRO} WHERE l.codigo = ? GROUP BY l.codigo`)
-      .get(codigoLivro) as Livro | undefined;
-    if (!livro) throw naoEncontrado("Livro não encontrado");
-    return livro;
   }
 }

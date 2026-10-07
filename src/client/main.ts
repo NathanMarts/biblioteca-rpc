@@ -2,7 +2,6 @@ import { status, type ServiceError } from "@grpc/grpc-js";
 import { input, select } from "@inquirer/prompts";
 import { ENDERECO } from "../config.js";
 import { Situacao, type Exemplar } from "../generated/biblioteca.js";
-import { relogioDoAmbiente } from "../server/relogio.js";
 import { criarCliente, type ClienteBiblioteca } from "./cliente.js";
 import { tabela } from "./tabela.js";
 
@@ -36,15 +35,18 @@ const acoes: Record<string, Acao> = {
   "Realizar empréstimo": async (cliente) => {
     const usuario = await escolherUsuario(cliente);
     const livro = await escolherLivro(cliente);
-    const data = await input({ message: "Data do empréstimo (AAAA-MM-DD):", default: relogioDoAmbiente()() });
-    const r = await cliente.realizarEmprestimo(usuario, livro, data.trim());
-    console.log(`✔ Exemplar ${r.codigoExemplar} emprestado em ${r.dataEmprestimo}. Devolver até ${r.dataLimite}.`);
+    const { data: hoje } = await cliente.obterHoje();
+    const data = await input({ message: "Data do empréstimo (AAAA-MM-DD):", default: hoje });
+    const resposta = await cliente.realizarEmprestimo(usuario, livro, data.trim());
+    console.log(
+      `✔ Exemplar ${resposta.codigoExemplar} emprestado em ${resposta.dataEmprestimo}. Devolver até ${resposta.dataLimite}.`,
+    );
   },
   "Devolver livro": async (cliente) => {
     const usuario = await escolherUsuario(cliente);
     const livro = await escolherLivro(cliente);
-    const r = await cliente.devolverLivro(usuario, livro);
-    console.log(`✔ Exemplar ${r.codigoExemplar} devolvido em ${r.dataDevolucao}.`);
+    const resposta = await cliente.devolverLivro(usuario, livro);
+    console.log(`✔ Exemplar ${resposta.codigoExemplar} devolvido em ${resposta.dataDevolucao}.`);
   },
   "Empréstimos do usuário": async (cliente) => {
     const { emprestimos } = await cliente.consultarEmprestimosUsuario(await escolherUsuario(cliente));
@@ -80,7 +82,7 @@ const acoes: Record<string, Acao> = {
           e.nomeUsuario,
           e.codigoExemplar,
           e.dataEmprestimo,
-          e.dataDevolucao || "(em aberto)",
+          e.dataDevolucao || "(ativo)",
         ]),
       ),
     );
@@ -110,6 +112,9 @@ function mensagemDeErro(erro: unknown): string {
   const e = erro as Partial<ServiceError>;
   if (e.code === status.UNAVAILABLE) {
     return `Servidor indisponível em ${ENDERECO}. Verifique se ele está rodando (npm run servidor).`;
+  }
+  if (e.code === status.DEADLINE_EXCEEDED) {
+    return `O servidor em ${ENDERECO} não respondeu a tempo.`;
   }
   return e.details ?? String(erro);
 }

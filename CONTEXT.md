@@ -38,5 +38,12 @@ O número de dias, a partir da data do Empréstimo, em que o Exemplar pode ficar
 Situação de um Empréstimo ativo cujo Prazo já passou. Um Empréstimo ativo está **no prazo** ou **atrasado**.
 _Evitar_: Vencido, pendente
 
+**Situação**:
+Se um Empréstimo ativo está **no prazo** ou **atrasado**.
+_Evitar_: Status
+
+**Histórico**:
+Todos os Empréstimos, ativos e encerrados, de todos os Exemplares de um Livro.
+
 **Limite de empréstimos**:
 O número máximo de Empréstimos ativos que um Usuário pode ter ao mesmo tempo (3).

@@ -67,7 +67,7 @@ Tudo é configurado por variáveis de ambiente, todas opcionais:
 | `BIBLIOTECA_HOST` | `localhost` | Endereço em que o servidor escuta e ao qual o cliente se conecta. |
 | `BIBLIOTECA_PORTA` | `50051` | Porta do servidor. |
 | `BIBLIOTECA_BANCO` | `biblioteca.db` | Arquivo SQLite usado pelo servidor e pelo `reset`. |
-| `BIBLIOTECA_HOJE` | data do sistema | Fixa a data de "hoje" (`AAAA-MM-DD`), útil para demonstrar atrasos. |
+| `BIBLIOTECA_HOJE` | data do sistema | Fixa a data de "hoje" do servidor (`AAAA-MM-DD`), útil para demonstrar atrasos. Um valor inválido impede o servidor de subir. |
 
 Para rodar em máquinas diferentes, suba o servidor com `BIBLIOTECA_HOST=0.0.0.0` e aponte o cliente para o IP da máquina do servidor:
 
@@ -88,7 +88,7 @@ O glossário completo está em [CONTEXT.md](CONTEXT.md).
 - **Prazo:** 7 dias. A **data limite** é a data do empréstimo mais 7 dias. Depois dela, o Empréstimo está **atrasado**.
 - **Limite:** cada Usuário pode ter no máximo **3** Empréstimos ativos.
 - Um Usuário não pode ter **dois Exemplares do mesmo Livro** ao mesmo tempo.
-- No empréstimo, o servidor escolhe o **Exemplar disponível de menor código**.
+- No empréstimo, o servidor escolhe o **Exemplar disponível de menor número** (`L001-2` antes de `L001-10`).
 
 ## API
 
@@ -98,11 +98,11 @@ O contrato completo, com comentários, está em [proto/biblioteca.proto](proto/b
 - **Erros:** são sinalizados pelo **status code do gRPC**, com a mensagem em português no campo `details`.
 - **Consultas sem resultado:** retornam **lista vazia**, não erro. O cliente exibe a mensagem correspondente.
 
-As cinco funções do enunciado foram mantidas, com os nomes no padrão PascalCase do protobuf. As duas listagens no fim da seção são extras, além do que o enunciado pede: elas permitem que o cliente ofereça listas de seleção em vez de pedir que o operador digite códigos.
+As cinco funções do enunciado foram mantidas, com os nomes no padrão PascalCase do protobuf. As três RPCs no fim da seção são extras, além do que o enunciado pede: as listagens permitem que o cliente ofereça listas de seleção em vez de pedir que o operador digite códigos, e `ObterHoje` fornece a data padrão do empréstimo.
 
 ### `RealizarEmprestimo(codigo_usuario, codigo_livro, data_emprestimo)`
 
-Verifica se o Livro tem algum Exemplar disponível. Se tiver, empresta ao Usuário o Exemplar disponível de menor código. A data pode estar no passado, mas não no futuro.
+Verifica se o Livro tem algum Exemplar disponível. Se tiver, empresta ao Usuário o Exemplar disponível de menor número. A data pode estar no passado, mas não no futuro.
 
 **Retorno:** `codigo_exemplar`, `data_emprestimo` e `data_limite`.
 
@@ -159,10 +159,11 @@ Mostra o histórico de Empréstimos de **todos os Exemplares** do Livro, do mais
 
 **Erro:** `NOT_FOUND` "Livro não encontrado".
 
-### Extras: `ListarLivros()` e `ListarUsuarios()`
+### Extras: `ListarLivros()`, `ListarUsuarios()` e `ObterHoje()`
 
 - `ListarLivros` retorna código, título, autor, `disponiveis` e `total` de cada Livro.
 - `ListarUsuarios` retorna código e nome de cada Usuário.
+- `ObterHoje` retorna a data de hoje do servidor (`data`). O cliente usa essa data para pré-preencher o empréstimo, então a data padrão sempre segue o relógio do servidor, mesmo com `BIBLIOTECA_HOJE` definida só no servidor.
 
 ## Exemplos de uso
 
@@ -224,7 +225,7 @@ L001   Dom Casmurro                                L001-1    2026-10-18     2026
 ```
 Usuário  Nome          Exemplar  Emprestado em  Devolvido em
 ───────  ────────────  ────────  ─────────────  ────────────
-U001     Ana Souza     L003-1    2026-10-08     (em aberto)
+U001     Ana Souza     L003-1    2026-10-08     (ativo)
 U003     Carla Mendes  L003-1    2026-10-02     2026-10-07
 ```
 
@@ -290,10 +291,11 @@ As decisões que têm alternativas relevantes estão registradas como ADRs em [d
   - Cada operação de escrita (empréstimo e devolução) roda dentro de uma **transação**. Como o driver é síncrono e o Node executa um handler por vez, a verificação "há Exemplar disponível?" e a gravação do Empréstimo são atômicas.
   - Por isso, dois clientes nunca conseguem pegar o último Exemplar ao mesmo tempo.
 - **"Hoje" controlado pelo servidor.**
-  - A situação de atraso e a data de devolução usam a data do servidor, não a do cliente. Isso evita que relógios diferentes entre máquinas gerem resultados inconsistentes.
+  - A situação de atraso, a data de devolução e a data padrão do empréstimo (via `ObterHoje`) usam a data do servidor, não a do cliente. Isso evita que relógios diferentes entre máquinas gerem resultados inconsistentes.
   - A variável `BIBLIOTECA_HOJE` permite fixar essa data para demonstrações.
 - **Cliente de linha de comando** com `@inquirer/prompts`.
   - O enunciado aceita interface texto, e os menus navegáveis e as listas de seleção evitam erros de digitação de códigos.
+  - Cada chamada tem um tempo limite de 5 segundos, para o cliente não travar se o servidor não responder.
 - **Testes.**
   - Os testes automatizados (`vitest`) sobem um **servidor gRPC real** numa porta aleatória, com banco em memória e data fixa, e chamam a API pelo mesmo cliente que o CLI usa.
   - Assim, toda regra de negócio é verificada de ponta a ponta, pela fronteira RPC.

@@ -1,7 +1,8 @@
 import * as grpc from "@grpc/grpc-js";
-import { BibliotecaService, type BibliotecaServer } from "../generated/biblioteca.js";
+import { BibliotecaService, Situacao, type BibliotecaServer } from "../generated/biblioteca.js";
 import { Biblioteca } from "./biblioteca.js";
 import type { DadosIniciais } from "./dados.js";
+import { ehDataValida } from "./datas.js";
 import { abrirBanco } from "./db.js";
 import { ErroBiblioteca, type TipoErro } from "./erros.js";
 import type { Relogio } from "./relogio.js";
@@ -24,6 +25,10 @@ export interface ServidorEmExecucao {
 }
 
 export async function iniciarServidor(config: ConfiguracaoServidor): Promise<ServidorEmExecucao> {
+  const hoje = config.relogio();
+  if (!ehDataValida(hoje)) {
+    throw new Error(`Data de hoje inválida: "${hoje}". Use o formato AAAA-MM-DD (ex.: BIBLIOTECA_HOJE=2026-10-20).`);
+  }
   const db = abrirBanco(config.banco, config.dadosIniciais);
   const biblioteca = new Biblioteca(db, config.relogio);
   const unario = criarAdaptador(config.log);
@@ -31,6 +36,7 @@ export async function iniciarServidor(config: ConfiguracaoServidor): Promise<Ser
   const implementacao: BibliotecaServer = {
     listarUsuarios: unario("ListarUsuarios", () => ({ usuarios: biblioteca.listarUsuarios() })),
     listarLivros: unario("ListarLivros", () => ({ livros: biblioteca.listarLivros() })),
+    obterHoje: unario("ObterHoje", () => ({ data: config.relogio() })),
     consultarLivro: unario("ConsultarLivro", (req) => biblioteca.consultarLivro(req.codigoLivro)),
     realizarEmprestimo: unario("RealizarEmprestimo", (req) =>
       biblioteca.realizarEmprestimo(req.codigoUsuario, req.codigoLivro, req.dataEmprestimo),
@@ -39,7 +45,12 @@ export async function iniciarServidor(config: ConfiguracaoServidor): Promise<Ser
       biblioteca.devolverLivro(req.codigoUsuario, req.codigoLivro),
     ),
     consultarEmprestimosUsuario: unario("ConsultarEmprestimosUsuario", (req) => ({
-      emprestimos: biblioteca.consultarEmprestimosUsuario(req.codigoUsuario),
+      emprestimos: biblioteca
+        .consultarEmprestimosUsuario(req.codigoUsuario)
+        .map(({ atrasado, ...emprestimo }) => ({
+          ...emprestimo,
+          situacao: atrasado ? Situacao.ATRASADO : Situacao.NO_PRAZO,
+        })),
     })),
     consultarEmprestimosLivro: unario("ConsultarEmprestimosLivro", (req) => ({
       emprestimos: biblioteca.consultarEmprestimosLivro(req.codigoLivro),

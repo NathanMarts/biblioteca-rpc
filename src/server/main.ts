@@ -1,17 +1,24 @@
 import { BANCO, HOST, PORTA } from "../config.js";
-import { relogioDoAmbiente } from "./relogio.js";
+import { relogioDoAmbiente, type Relogio } from "./relogio.js";
 import { dadosDeDemonstracao } from "./seed.js";
-import { iniciarServidor } from "./servidor.js";
+import { iniciarServidor, type ServidorEmExecucao } from "./servidor.js";
 
-const relogio = relogioDoAmbiente();
-const servidor = await iniciarServidor({
-  banco: BANCO,
-  host: HOST,
-  porta: PORTA,
-  relogio,
-  dadosIniciais: dadosDeDemonstracao(relogio()),
-  log: true,
-});
+let servidor: ServidorEmExecucao;
+let relogio: Relogio;
+try {
+  relogio = relogioDoAmbiente();
+  servidor = await iniciarServidor({
+    banco: BANCO,
+    host: HOST,
+    porta: PORTA,
+    relogio,
+    dadosIniciais: dadosDeDemonstracao(relogio()),
+    log: true,
+  });
+} catch (erro) {
+  console.error(`Não foi possível iniciar o servidor: ${erro instanceof Error ? erro.message : erro}`);
+  process.exit(1);
+}
 
 console.log(`Servidor da Biblioteca escutando em ${servidor.endereco}`);
 console.log(`Banco: ${BANCO} | Hoje: ${relogio()}`);

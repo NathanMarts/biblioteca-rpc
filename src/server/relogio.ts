@@ -1,3 +1,5 @@
+import { ehDataValida } from "./datas.js";
+
 /** Fornece a data de "hoje" do servidor, no formato AAAA-MM-DD. */
 export type Relogio = () => string;
 
@@ -14,8 +16,12 @@ export function relogioDoSistema(): Relogio {
   };
 }
 
-/** Usa BIBLIOTECA_HOJE se definida; senão, a data real do sistema. */
+/** Usa BIBLIOTECA_HOJE se definida (e válida); senão, a data real do sistema. */
 export function relogioDoAmbiente(): Relogio {
   const hoje = process.env.BIBLIOTECA_HOJE;
-  return hoje ? relogioFixo(hoje) : relogioDoSistema();
+  if (hoje === undefined || hoje === "") return relogioDoSistema();
+  if (!ehDataValida(hoje)) {
+    throw new Error(`Data de hoje inválida: BIBLIOTECA_HOJE="${hoje}". Use o formato AAAA-MM-DD (ex.: 2026-10-20).`);
+  }
+  return relogioFixo(hoje);
 }

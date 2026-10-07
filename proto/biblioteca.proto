@@ -18,11 +18,14 @@ service Biblioteca {
   // Lista os Livros do acervo com a disponibilidade de Exemplares. (Extra, além do enunciado.)
   rpc ListarLivros(ListarLivrosRequest) returns (ListarLivrosResponse);
 
+  // Informa a data de hoje do servidor, usada como padrão pelo cliente. (Extra, além do enunciado.)
+  rpc ObterHoje(ObterHojeRequest) returns (ObterHojeResponse);
+
   // Informa se o Livro está disponível e a situação de cada Exemplar.
   // Erros: NOT_FOUND "Livro não encontrado".
   rpc ConsultarLivro(ConsultarLivroRequest) returns (ConsultarLivroResponse);
 
-  // Empresta ao Usuário o Exemplar disponível de menor código do Livro.
+  // Empresta ao Usuário o Exemplar disponível de menor número do Livro (L001-2 antes de L001-10).
   // Erros: NOT_FOUND "Usuário não encontrado" / "Livro não encontrado";
   //        INVALID_ARGUMENT "Data inválida";
   //        FAILED_PRECONDITION "Usuário já possui um exemplar deste livro" /
@@ -148,4 +151,10 @@ message EmprestimoDoLivro {
 
 message ConsultarEmprestimosLivroResponse {
   repeated EmprestimoDoLivro emprestimos = 1; // vazia se o Livro nunca foi emprestado
+}
+
+message ObterHojeRequest {}
+
+message ObterHojeResponse {
+  string data = 1; // AAAA-MM-DD
 }

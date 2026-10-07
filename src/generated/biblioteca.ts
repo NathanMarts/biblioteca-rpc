@@ -185,6 +185,14 @@ export interface ConsultarEmprestimosLivroResponse {
   emprestimos: EmprestimoDoLivro[];
 }
 
+export interface ObterHojeRequest {
+}
+
+export interface ObterHojeResponse {
+  /** AAAA-MM-DD */
+  data: string;
+}
+
 function createBaseUsuario(): Usuario {
   return { codigo: "", nome: "" };
 }
@@ -1982,6 +1990,125 @@ export const ConsultarEmprestimosLivroResponse: MessageFns<ConsultarEmprestimosL
   },
 };
 
+function createBaseObterHojeRequest(): ObterHojeRequest {
+  return {};
+}
+
+export const ObterHojeRequest: MessageFns<ObterHojeRequest> = {
+  encode(_: ObterHojeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ObterHojeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseObterHojeRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(_: any): ObterHojeRequest {
+    return {};
+  },
+
+  toJSON(_: ObterHojeRequest): unknown {
+    const obj: any = {};
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ObterHojeRequest>, I>>(base?: I): ObterHojeRequest {
+    return ObterHojeRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ObterHojeRequest>, I>>(_: I): ObterHojeRequest {
+    const message = createBaseObterHojeRequest();
+    return message;
+  },
+};
+
+function createBaseObterHojeResponse(): ObterHojeResponse {
+  return { data: "" };
+}
+
+export const ObterHojeResponse: MessageFns<ObterHojeResponse> = {
+  encode(message: ObterHojeResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.data !== "") {
+      writer.uint32(10).string(message.data);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ObterHojeResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseObterHojeResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.data = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): ObterHojeResponse {
+    return { data: isSet(object.data) ? globalThis.String(object.data) : "" };
+  },
+
+  toJSON(message: ObterHojeResponse): unknown {
+    const obj: any = {};
+    if (message.data !== "") {
+      obj.data = message.data;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ObterHojeResponse>, I>>(base?: I): ObterHojeResponse {
+    return ObterHojeResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ObterHojeResponse>, I>>(object: I): ObterHojeResponse {
+    const message = createBaseObterHojeResponse();
+    message.data = object.data ?? "";
+    return message;
+  },
+};
+
 /** Serviço de empréstimo de livros de uma biblioteca. */
 export type BibliotecaService = typeof BibliotecaService;
 export const BibliotecaService = {
@@ -2008,6 +2135,16 @@ export const BibliotecaService = {
       Buffer.from(ListarLivrosResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer): ListarLivrosResponse => ListarLivrosResponse.decode(value),
   },
+  /** Informa a data de hoje do servidor, usada como padrão pelo cliente. (Extra, além do enunciado.) */
+  obterHoje: {
+    path: "/biblioteca.Biblioteca/ObterHoje" as const,
+    requestStream: false as const,
+    responseStream: false as const,
+    requestSerialize: (value: ObterHojeRequest): Buffer => Buffer.from(ObterHojeRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): ObterHojeRequest => ObterHojeRequest.decode(value),
+    responseSerialize: (value: ObterHojeResponse): Buffer => Buffer.from(ObterHojeResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer): ObterHojeResponse => ObterHojeResponse.decode(value),
+  },
   /**
    * Informa se o Livro está disponível e a situação de cada Exemplar.
    * Erros: NOT_FOUND "Livro não encontrado".
@@ -2024,7 +2161,7 @@ export const BibliotecaService = {
     responseDeserialize: (value: Buffer): ConsultarLivroResponse => ConsultarLivroResponse.decode(value),
   },
   /**
-   * Empresta ao Usuário o Exemplar disponível de menor código do Livro.
+   * Empresta ao Usuário o Exemplar disponível de menor número do Livro (L001-2 antes de L001-10).
    * Erros: NOT_FOUND "Usuário não encontrado" / "Livro não encontrado";
    *        INVALID_ARGUMENT "Data inválida";
    *        FAILED_PRECONDITION "Usuário já possui um exemplar deste livro" /
@@ -2097,13 +2234,15 @@ export interface BibliotecaServer extends UntypedServiceImplementation {
   listarUsuarios: handleUnaryCall<ListarUsuariosRequest, ListarUsuariosResponse>;
   /** Lista os Livros do acervo com a disponibilidade de Exemplares. (Extra, além do enunciado.) */
   listarLivros: handleUnaryCall<ListarLivrosRequest, ListarLivrosResponse>;
+  /** Informa a data de hoje do servidor, usada como padrão pelo cliente. (Extra, além do enunciado.) */
+  obterHoje: handleUnaryCall<ObterHojeRequest, ObterHojeResponse>;
   /**
    * Informa se o Livro está disponível e a situação de cada Exemplar.
    * Erros: NOT_FOUND "Livro não encontrado".
    */
   consultarLivro: handleUnaryCall<ConsultarLivroRequest, ConsultarLivroResponse>;
   /**
-   * Empresta ao Usuário o Exemplar disponível de menor código do Livro.
+   * Empresta ao Usuário o Exemplar disponível de menor número do Livro (L001-2 antes de L001-10).
    * Erros: NOT_FOUND "Usuário não encontrado" / "Livro não encontrado";
    *        INVALID_ARGUMENT "Data inválida";
    *        FAILED_PRECONDITION "Usuário já possui um exemplar deste livro" /
@@ -2161,6 +2300,22 @@ export interface BibliotecaClient extends Client {
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: ListarLivrosResponse) => void,
   ): ClientUnaryCall;
+  /** Informa a data de hoje do servidor, usada como padrão pelo cliente. (Extra, além do enunciado.) */
+  obterHoje(
+    request: ObterHojeRequest,
+    callback: (error: ServiceError | null, response: ObterHojeResponse) => void,
+  ): ClientUnaryCall;
+  obterHoje(
+    request: ObterHojeRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: ObterHojeResponse) => void,
+  ): ClientUnaryCall;
+  obterHoje(
+    request: ObterHojeRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: ObterHojeResponse) => void,
+  ): ClientUnaryCall;
   /**
    * Informa se o Livro está disponível e a situação de cada Exemplar.
    * Erros: NOT_FOUND "Livro não encontrado".
@@ -2181,7 +2336,7 @@ export interface BibliotecaClient extends Client {
     callback: (error: ServiceError | null, response: ConsultarLivroResponse) => void,
   ): ClientUnaryCall;
   /**
-   * Empresta ao Usuário o Exemplar disponível de menor código do Livro.
+   * Empresta ao Usuário o Exemplar disponível de menor número do Livro (L001-2 antes de L001-10).
    * Erros: NOT_FOUND "Usuário não encontrado" / "Livro não encontrado";
    *        INVALID_ARGUMENT "Data inválida";
    *        FAILED_PRECONDITION "Usuário já possui um exemplar deste livro" /

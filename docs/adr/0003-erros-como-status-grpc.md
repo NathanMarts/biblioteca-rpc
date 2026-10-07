@@ -4,4 +4,4 @@ As funções do enunciado retornam "sucesso ou mensagem de erro". Decidimos sina
 
 ## Consequências
 
-Consultas que não encontram nada (ex.: usuário sem empréstimos) não são erro: retornam lista vazia, e o cliente exibe a mensagem correspondente. `NOT_FOUND` fica reservado para códigos de Livro ou Usuário inexistentes.
+Consultas que não encontram nada (ex.: usuário sem empréstimos) não são erro: retornam lista vazia, e o cliente exibe a mensagem correspondente. `NOT_FOUND` fica reservado para quando a coisa que a requisição aponta não existe: um código de Livro ou Usuário inexistente, ou, em `DevolverLivro`, um Empréstimo inexistente para aquele par Usuário + Livro. Quando o Empréstimo existiu mas já foi encerrado, o erro é `FAILED_PRECONDITION` ("Livro já devolvido").

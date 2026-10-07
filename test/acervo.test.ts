@@ -48,3 +48,19 @@ describe("ConsultarLivro", () => {
     await esperarErro(ambiente.cliente.consultarLivro("L999"), status.NOT_FOUND, "Livro não encontrado");
   });
 });
+
+describe("Livro sem Exemplares", () => {
+  it("aparece no acervo como indisponível, sem ser tratado como inexistente", async () => {
+    ambiente = await iniciarTeste({
+      livros: [{ codigo: "L001", titulo: "Dom Casmurro", autor: "Machado de Assis", exemplares: 0 }],
+    });
+
+    const { livros } = await ambiente.cliente.listarLivros();
+    const consulta = await ambiente.cliente.consultarLivro("L001");
+
+    expect(livros).toEqual([
+      { codigo: "L001", titulo: "Dom Casmurro", autor: "Machado de Assis", disponiveis: 0, total: 0 },
+    ]);
+    expect(consulta.exemplares).toEqual([]);
+  });
+});

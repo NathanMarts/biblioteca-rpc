@@ -25,6 +25,9 @@ const SCHEMA = `
     data_emprestimo TEXT NOT NULL,
     data_devolucao  TEXT
   );
+  -- Um Empréstimo é ativo enquanto não tem data de Devolução.
+  CREATE VIEW IF NOT EXISTS emprestimo_ativo AS
+    SELECT * FROM emprestimo WHERE data_devolucao IS NULL;
 `;
 
 /** Abre o banco (arquivo ou ":memory:"), cria o schema e carrega os dados iniciais se estiver vazio. */

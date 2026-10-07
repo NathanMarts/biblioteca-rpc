@@ -127,7 +127,9 @@ export class Biblioteca {
         dataLimite: somarDias(dataEmprestimo, PRAZO_EM_DIAS),
       };
     });
-    return emprestar();
+    // IMMEDIATE: pega o lock de escrita já no início, antes de ler a disponibilidade, para que
+    // outro processo usando o mesmo banco espere em vez de decidir com uma leitura antiga.
+    return emprestar.immediate();
   }
 
   devolverLivro(codigoUsuario: string, codigoLivro: string) {
@@ -150,7 +152,7 @@ export class Biblioteca {
       this.db.prepare("UPDATE emprestimo SET data_devolucao = ? WHERE id = ?").run(dataDevolucao, ativo.id);
       return { codigoExemplar: ativo.codigoExemplar, dataDevolucao };
     });
-    return devolver();
+    return devolver.immediate();
   }
 
   consultarEmprestimosUsuario(codigoUsuario: string): EmprestimoDoUsuario[] {

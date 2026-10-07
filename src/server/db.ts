@@ -28,6 +28,9 @@ const SCHEMA = `
   -- Um Empréstimo é ativo enquanto não tem data de Devolução.
   CREATE VIEW IF NOT EXISTS emprestimo_ativo AS
     SELECT * FROM emprestimo WHERE data_devolucao IS NULL;
+  -- Garantia no próprio banco: um Exemplar tem no máximo um Empréstimo ativo.
+  CREATE UNIQUE INDEX IF NOT EXISTS um_emprestimo_ativo_por_exemplar
+    ON emprestimo (codigo_exemplar) WHERE data_devolucao IS NULL;
 `;
 
 /** Abre o banco (arquivo ou ":memory:"), cria o schema e carrega os dados iniciais se estiver vazio. */
@@ -35,6 +38,8 @@ export function abrirBanco(caminho: string, dadosIniciais: DadosIniciais): Db {
   const db = new Database(caminho);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
+  // Outro processo com o mesmo arquivo segurando a escrita: espera até 5 s em vez de falhar.
+  db.pragma("busy_timeout = 5000");
   db.exec(SCHEMA);
   if (estaVazio(db)) carregarDados(db, dadosIniciais);
   return db;

@@ -1,4 +1,5 @@
 import * as grpc from "@grpc/grpc-js";
+import { randomUUID } from "node:crypto";
 import {
   BibliotecaClient,
   type ConsultarEmprestimosLivroResponse,
@@ -23,11 +24,45 @@ type Metodo<Req, Res> = (
 /** Tempo máximo de espera por uma resposta; evita que o cliente trave se o servidor não responder. */
 const TEMPO_LIMITE_MS = 5000;
 
-function chamar<Req, Res>(metodo: Metodo<Req, Res>, requisicao: Req) {
+/**
+ * Novas tentativas automáticas do gRPC: se o servidor estiver indisponível (queda, reinício,
+ * rede), a chamada é repetida com espera crescente, dentro do tempo limite. Só é seguro
+ * repetir porque as operações que alteram dados levam uma chave de idempotência.
+ */
+const CONFIGURACAO_DO_SERVICO = JSON.stringify({
+  methodConfig: [
+    {
+      name: [{ service: "biblioteca.Biblioteca" }],
+      retryPolicy: {
+        maxAttempts: 5,
+        initialBackoff: "0.3s",
+        maxBackoff: "2s",
+        backoffMultiplier: 2,
+        retryableStatusCodes: ["UNAVAILABLE"],
+      },
+    },
+  ],
+});
+
+/** Metadado com a chave de idempotência (ver src/server/idempotencia.ts). */
+const METADADO_CHAVE_IDEMPOTENCIA = "chave-idempotencia";
+
+export interface OpcoesOperacao {
+  /** Chave de idempotência; por padrão, uma nova a cada operação. */
+  chaveIdempotencia?: string;
+}
+
+function comChave(opcoes: OpcoesOperacao = {}): grpc.Metadata {
+  const metadados = new grpc.Metadata();
+  metadados.set(METADADO_CHAVE_IDEMPOTENCIA, opcoes.chaveIdempotencia ?? randomUUID());
+  return metadados;
+}
+
+function chamar<Req, Res>(metodo: Metodo<Req, Res>, requisicao: Req, metadados = new grpc.Metadata()) {
   return new Promise<Res>((resolve, reject) =>
     metodo(
       requisicao,
-      new grpc.Metadata(),
+      metadados,
       { deadline: Date.now() + TEMPO_LIMITE_MS },
       (erro, resposta) => (erro ? reject(erro) : resolve(resposta)),
     ),
@@ -62,8 +97,9 @@ export interface ClienteBiblioteca {
     codigoUsuario: string,
     codigoLivro: string,
     dataEmprestimo: string,
+    opcoes?: OpcoesOperacao,
   ): Promise<RealizarEmprestimoResponse>;
-  devolverLivro(codigoUsuario: string, codigoLivro: string): Promise<DevolverLivroResponse>;
+  devolverLivro(codigoUsuario: string, codigoLivro: string, opcoes?: OpcoesOperacao): Promise<DevolverLivroResponse>;
   consultarEmprestimosUsuario(codigoUsuario: string): Promise<ConsultarEmprestimosUsuarioResponse>;
   consultarEmprestimosLivro(codigoLivro: string): Promise<ConsultarEmprestimosLivroResponse>;
   fechar(): void;
@@ -81,6 +117,10 @@ export function criarCliente(endereco: string, opcoes: OpcoesCliente = {}): Clie
     : grpc.credentials.createInsecure();
   const stub = new BibliotecaClient(endereco, credenciais, {
     interceptors: [anexarToken(() => token)],
+    "grpc.service_config": CONFIGURACAO_DO_SERVICO,
+    // Reconectar rápido depois de uma falha, para as novas tentativas encontrarem o servidor.
+    "grpc.initial_reconnect_backoff_ms": 300,
+    "grpc.max_reconnect_backoff_ms": 2000,
   });
   return {
     entrar: async (login, senha) => {
@@ -98,10 +138,10 @@ export function criarCliente(endereco: string, opcoes: OpcoesCliente = {}): Clie
     listarLivros: () => chamar(stub.listarLivros.bind(stub), {}),
     obterHoje: () => chamar(stub.obterHoje.bind(stub), {}),
     consultarLivro: (codigoLivro) => chamar(stub.consultarLivro.bind(stub), { codigoLivro }),
-    realizarEmprestimo: (codigoUsuario, codigoLivro, dataEmprestimo) =>
-      chamar(stub.realizarEmprestimo.bind(stub), { codigoUsuario, codigoLivro, dataEmprestimo }),
-    devolverLivro: (codigoUsuario, codigoLivro) =>
-      chamar(stub.devolverLivro.bind(stub), { codigoUsuario, codigoLivro }),
+    realizarEmprestimo: (codigoUsuario, codigoLivro, dataEmprestimo, opcoes) =>
+      chamar(stub.realizarEmprestimo.bind(stub), { codigoUsuario, codigoLivro, dataEmprestimo }, comChave(opcoes)),
+    devolverLivro: (codigoUsuario, codigoLivro, opcoes) =>
+      chamar(stub.devolverLivro.bind(stub), { codigoUsuario, codigoLivro }, comChave(opcoes)),
     consultarEmprestimosUsuario: (codigoUsuario) =>
       chamar(stub.consultarEmprestimosUsuario.bind(stub), { codigoUsuario }),
     consultarEmprestimosLivro: (codigoLivro) =>

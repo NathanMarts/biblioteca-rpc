@@ -10,6 +10,7 @@ export const HOJE = "2026-10-20";
 
 /** Um certificado por arquivo de teste: todos os testes conversam com o servidor via TLS. */
 const certificado = gerarCertificado();
+export const certificadoDeTeste = () => certificado;
 
 const BIBLIOTECARIO_PADRAO = { login: "teste", nome: "Bibliotecário de Teste", senha: "senha-teste" };
 
@@ -26,14 +27,14 @@ export interface Ambiente {
 export async function iniciarTeste(
   dados: Partial<DadosIniciais> = {},
   hoje: string = HOJE,
-  opcoes: { agora?: () => number } = {},
+  opcoes: { agora?: () => number; porta?: number } = {},
 ): Promise<Ambiente> {
   const bibliotecarios = dados.bibliotecarios ?? [BIBLIOTECARIO_PADRAO];
   const tls = await certificado;
   const servidor = await iniciarServidor({
     banco: ":memory:",
     host: "127.0.0.1",
-    porta: 0,
+    porta: opcoes.porta ?? 0,
     relogio: relogioFixo(hoje),
     agora: opcoes.agora,
     dadosIniciais: { usuarios: [], livros: [], emprestimos: [], ...dados, bibliotecarios },

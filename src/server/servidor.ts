@@ -3,6 +3,7 @@ import type { CertificadoTls } from "../certificados.js";
 import { BibliotecaService, Situacao, type BibliotecaServer } from "../generated/biblioteca.js";
 import { Autenticacao } from "./autenticacao.js";
 import { Biblioteca } from "./biblioteca.js";
+import { Idempotencia } from "./idempotencia.js";
 import type { DadosIniciais } from "./dados.js";
 import { ehDataValida } from "./datas.js";
 import { abrirBanco } from "./db.js";
@@ -39,6 +40,7 @@ export async function iniciarServidor(config: ConfiguracaoServidor): Promise<Ser
   const db = abrirBanco(config.banco, config.dadosIniciais);
   const biblioteca = new Biblioteca(db, config.relogio);
   const autenticacao = new Autenticacao(db, config.agora ?? Date.now);
+  const idempotencia = new Idempotencia(db, config.agora ?? Date.now);
 
   const implementacao: BibliotecaServer = {
     entrar: unario("Entrar", (req) => autenticacao.entrar(req.login, req.senha)),
@@ -51,11 +53,15 @@ export async function iniciarServidor(config: ConfiguracaoServidor): Promise<Ser
       if (bibliotecario) return { livro, exemplares };
       return { livro, exemplares: exemplares.map((e) => ({ ...e, codigoUsuario: "", nomeUsuario: "" })) };
     }),
-    realizarEmprestimo: unario("RealizarEmprestimo", (req) =>
-      biblioteca.realizarEmprestimo(req.codigoUsuario, req.codigoLivro, req.dataEmprestimo),
+    realizarEmprestimo: unario("RealizarEmprestimo", (req, { chaveIdempotencia }) =>
+      idempotencia.executar(chaveIdempotencia, "RealizarEmprestimo", () =>
+        biblioteca.realizarEmprestimo(req.codigoUsuario, req.codigoLivro, req.dataEmprestimo),
+      ),
     ),
-    devolverLivro: unario("DevolverLivro", (req) =>
-      biblioteca.devolverLivro(req.codigoUsuario, req.codigoLivro),
+    devolverLivro: unario("DevolverLivro", (req, { chaveIdempotencia }) =>
+      idempotencia.executar(chaveIdempotencia, "DevolverLivro", () =>
+        biblioteca.devolverLivro(req.codigoUsuario, req.codigoLivro),
+      ),
     ),
     consultarEmprestimosUsuario: unario("ConsultarEmprestimosUsuario", (req) => ({
       emprestimos: biblioteca
@@ -118,7 +124,12 @@ const STATUS_POR_TIPO: Record<TipoErro, grpc.status> = {
 interface Contexto {
   /** Login do Bibliotecário autenticado, se houver. */
   bibliotecario?: string;
+  /** Chave de idempotência enviada pelo cliente, se houver. */
+  chaveIdempotencia?: string;
 }
+
+/** Metadado em que o cliente envia a chave de idempotência das operações que alteram dados. */
+export const METADADO_CHAVE_IDEMPOTENCIA = "chave-idempotencia";
 
 /**
  * Converte uma função síncrona em handler gRPC unário, traduzindo ErroBiblioteca para o
@@ -131,7 +142,8 @@ function unario<Req, Res>(
   return (call, callback) => {
     try {
       const bibliotecario = call.metadata.get(METADADO_BIBLIOTECARIO)[0]?.toString();
-      callback(null, executar(call.request, { bibliotecario }));
+      const chaveIdempotencia = call.metadata.get(METADADO_CHAVE_IDEMPOTENCIA)[0]?.toString();
+      callback(null, executar(call.request, { bibliotecario, chaveIdempotencia }));
     } catch (erro) {
       if (erro instanceof ErroBiblioteca) {
         callback({ code: STATUS_POR_TIPO[erro.tipo], details: erro.message });

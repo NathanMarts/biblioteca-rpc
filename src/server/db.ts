@@ -15,6 +15,12 @@ const SCHEMA = `
     login     TEXT NOT NULL REFERENCES bibliotecario(login),
     expira_em INTEGER NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS idempotencia (
+    chave     TEXT PRIMARY KEY,
+    metodo    TEXT NOT NULL,
+    resposta  TEXT NOT NULL,
+    criada_em INTEGER NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS usuario (
     codigo TEXT PRIMARY KEY,
     nome   TEXT NOT NULL

@@ -1,5 +1,5 @@
 import { status, type ServiceError } from "@grpc/grpc-js";
-import { input, select } from "@inquirer/prompts";
+import { input, select, Separator } from "@inquirer/prompts";
 import { ENDERECO } from "../config.js";
 import { Situacao, type Exemplar } from "../generated/biblioteca.js";
 import { criarCliente, type ClienteBiblioteca } from "./cliente.js";
@@ -7,22 +7,36 @@ import { tabela } from "./tabela.js";
 
 type Acao = (cliente: ClienteBiblioteca) => Promise<void>;
 
+/** Sinaliza que o operador desistiu da ação e quer voltar ao menu principal. */
+class VoltarAoMenu extends Error {}
+
+const VOLTAR = "__voltar__";
+
+/** Lista de seleção com a opção "Voltar ao menu" no fim. */
+async function escolher(message: string, opcoes: { name: string; value: string }[]): Promise<string> {
+  const escolha = await select({
+    message,
+    choices: [...opcoes, new Separator(), { name: "↩ Voltar ao menu", value: VOLTAR }],
+    pageSize: 14,
+  });
+  if (escolha === VOLTAR) throw new VoltarAoMenu();
+  return escolha;
+}
+
 async function escolherLivro(cliente: ClienteBiblioteca): Promise<string> {
   const { livros } = await cliente.listarLivros();
-  return select({
-    message: "Livro:",
-    choices: livros.map((l) => ({ name: `${l.codigo}  ${l.titulo} (${l.disponiveis}/${l.total})`, value: l.codigo })),
-    pageSize: 12,
-  });
+  return escolher(
+    "Livro:",
+    livros.map((l) => ({ name: `${l.codigo}  ${l.titulo} (${l.disponiveis}/${l.total})`, value: l.codigo })),
+  );
 }
 
 async function escolherUsuario(cliente: ClienteBiblioteca): Promise<string> {
   const { usuarios } = await cliente.listarUsuarios();
-  return select({
-    message: "Usuário:",
-    choices: usuarios.map((u) => ({ name: `${u.codigo}  ${u.nome}`, value: u.codigo })),
-    pageSize: 12,
-  });
+  return escolher(
+    "Usuário:",
+    usuarios.map((u) => ({ name: `${u.codigo}  ${u.nome}`, value: u.codigo })),
+  );
 }
 
 function situacaoDoExemplar(e: Exemplar): string {
@@ -36,8 +50,9 @@ const acoes: Record<string, Acao> = {
     const usuario = await escolherUsuario(cliente);
     const livro = await escolherLivro(cliente);
     const { data: hoje } = await cliente.obterHoje();
-    const data = await input({ message: "Data do empréstimo (AAAA-MM-DD):", default: hoje });
-    const resposta = await cliente.realizarEmprestimo(usuario, livro, data.trim());
+    const data = (await input({ message: "Data do empréstimo (AAAA-MM-DD, ou V para voltar):", default: hoje })).trim();
+    if (data.toUpperCase() === "V") throw new VoltarAoMenu();
+    const resposta = await cliente.realizarEmprestimo(usuario, livro, data);
     console.log(
       `✔ Exemplar ${resposta.codigoExemplar} emprestado em ${resposta.dataEmprestimo}. Devolver até ${resposta.dataLimite}.`,
     );
@@ -50,16 +65,15 @@ const acoes: Record<string, Acao> = {
       console.log("Nenhum empréstimo encontrado para o usuário");
       return;
     }
-    const livro = await select({
-      message: "Livro a devolver:",
-      choices: emprestimos.map((e) => ({
+    const livro = await escolher(
+      "Livro a devolver:",
+      emprestimos.map((e) => ({
         name: `${e.codigoLivro}  ${e.titulo} (exemplar ${e.codigoExemplar}, ${
           e.situacao === Situacao.ATRASADO ? `atrasado, prazo até ${e.dataLimite}` : `devolver até ${e.dataLimite}`
         })`,
         value: e.codigoLivro,
       })),
-      pageSize: 12,
-    });
+    );
     const resposta = await cliente.devolverLivro(usuario, livro);
     console.log(`✔ Exemplar ${resposta.codigoExemplar} devolvido em ${resposta.dataDevolucao}.`);
   },
@@ -149,7 +163,7 @@ async function main() {
         await acoes[escolha](cliente);
       } catch (erro) {
         if (estaSaindo(erro)) throw erro;
-        console.log(`✖ ${mensagemDeErro(erro)}`);
+        if (!(erro instanceof VoltarAoMenu)) console.log(`✖ ${mensagemDeErro(erro)}`);
       }
       console.log();
     }

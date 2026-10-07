@@ -1,7 +1,16 @@
 import type { DadosIniciais } from "./dados.js";
+import { somarDias } from "./datas.js";
 
-/** Acervo de demonstração, carregado quando o banco está vazio. */
-export function dadosDeDemonstracao(): DadosIniciais {
+/**
+ * Acervo de demonstração, carregado quando o banco está vazio. As datas são relativas a `hoje`
+ * para que sempre existam Empréstimos no prazo, atrasados e encerrados:
+ * - Ana (U001) está no limite de 3 Empréstimos, um deles atrasado;
+ * - "Grande Sertão: Veredas" (L003) está totalmente indisponível;
+ * - Bruno (U002) tem um Empréstimo atrasado e um no prazo;
+ * - Carla (U003) não tem Empréstimos ativos, só histórico.
+ */
+export function dadosDeDemonstracao(hoje: string): DadosIniciais {
+  const diasAtras = (dias: number) => somarDias(hoje, -dias);
   return {
     usuarios: [
       { codigo: "U001", nome: "Ana Souza" },
@@ -20,6 +29,18 @@ export function dadosDeDemonstracao(): DadosIniciais {
       { codigo: "L009", titulo: "Redes de Computadores", autor: "Andrew S. Tanenbaum", exemplares: 1 },
       { codigo: "L010", titulo: "O Alienista", autor: "Machado de Assis", exemplares: 1 },
     ],
-    emprestimos: [],
+    emprestimos: [
+      // Encerrados (histórico)
+      { usuario: "U001", exemplar: "L007-1", dataEmprestimo: diasAtras(40), dataDevolucao: diasAtras(33) },
+      { usuario: "U003", exemplar: "L001-2", dataEmprestimo: diasAtras(30), dataDevolucao: diasAtras(25) },
+      { usuario: "U002", exemplar: "L010-1", dataEmprestimo: diasAtras(20), dataDevolucao: diasAtras(15) },
+      { usuario: "U003", exemplar: "L003-1", dataEmprestimo: diasAtras(18), dataDevolucao: diasAtras(13) },
+      // Ativos
+      { usuario: "U001", exemplar: "L003-1", dataEmprestimo: diasAtras(12) }, // atrasado
+      { usuario: "U001", exemplar: "L008-1", dataEmprestimo: diasAtras(5) },
+      { usuario: "U001", exemplar: "L001-1", dataEmprestimo: diasAtras(2) },
+      { usuario: "U002", exemplar: "L002-1", dataEmprestimo: diasAtras(10) }, // atrasado
+      { usuario: "U002", exemplar: "L004-1", dataEmprestimo: diasAtras(1) },
+    ],
   };
 }

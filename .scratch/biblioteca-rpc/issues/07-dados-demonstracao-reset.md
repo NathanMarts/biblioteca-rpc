@@ -4,10 +4,10 @@
 
 **Blocked by:** 04 (`DevolverLivro`)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Seed completo e determinístico, com datas relativas ao "hoje" para que sempre existam Empréstimos no prazo e atrasados
-- [ ] Inclui pelo menos um Livro totalmente indisponível, um Usuário no limite de 3 Empréstimos e Empréstimos encerrados (histórico)
-- [ ] Seed carregado apenas quando o banco está vazio; dados persistem entre reinícios
-- [ ] `npm run reset` apaga e recria o banco com o seed
-- [ ] Testes existentes continuam independentes do seed de demonstração
+- [x] Seed completo e determinístico, com datas relativas ao "hoje" para que sempre existam Empréstimos no prazo e atrasados
+- [x] Inclui pelo menos um Livro totalmente indisponível, um Usuário no limite de 3 Empréstimos e Empréstimos encerrados (histórico)
+- [x] Seed carregado apenas quando o banco está vazio; dados persistem entre reinícios
+- [x] `npm run reset` apaga e recria o banco com o seed
+- [x] Testes existentes continuam independentes do seed de demonstração

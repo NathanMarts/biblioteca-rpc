@@ -9,7 +9,7 @@ const servidor = await iniciarServidor({
   host: HOST,
   porta: PORTA,
   relogio,
-  dadosIniciais: dadosDeDemonstracao(),
+  dadosIniciais: dadosDeDemonstracao(relogio()),
   log: true,
 });
 

@@ -1,8 +1,9 @@
 import { status, type ServiceError } from "@grpc/grpc-js";
-import { input, select } from "@inquirer/prompts";
+import { select } from "@inquirer/prompts";
 import { ENDERECO } from "../config.js";
 import { Situacao, type Exemplar } from "../generated/biblioteca.js";
 import { criarCliente, type ClienteBiblioteca } from "./cliente.js";
+import { perguntar, selecionar, VOLTAR } from "./prompts.js";
 import { tabela } from "./tabela.js";
 
 type Acao = (cliente: ClienteBiblioteca) => Promise<void>;
@@ -10,43 +11,11 @@ type Acao = (cliente: ClienteBiblioteca) => Promise<void>;
 /** Sinaliza que o operador desistiu da ação e quer voltar ao menu principal. */
 class VoltarAoMenu extends Error {}
 
-type Tecla = { name?: string };
-
-/**
- * Executa um prompt que é cancelado quando uma das `teclas` é pressionada,
- * lançando VoltarAoMenu.
- */
-async function comAtalhoDeVoltar<T>(
-  teclas: string[],
-  prompt: (contexto: { signal: AbortSignal }) => Promise<T>,
-): Promise<T> {
-  const controle = new AbortController();
-  const aoPressionar = (_: string, tecla?: Tecla) => {
-    if (tecla?.name && teclas.includes(tecla.name)) controle.abort();
-  };
-  process.stdin.on("keypress", aoPressionar);
-  try {
-    return await prompt({ signal: controle.signal });
-  } catch (erro) {
-    if (controle.signal.aborted) throw new VoltarAoMenu();
-    throw erro;
-  } finally {
-    process.stdin.off("keypress", aoPressionar);
-  }
-}
-
 /** Lista de seleção; Esc ou Backspace voltam ao menu. */
-function escolher(message: string, opcoes: { name: string; value: string }[]): Promise<string> {
-  return comAtalhoDeVoltar(["escape", "backspace"], (contexto) =>
-    select({ message: `${message} (Esc para voltar)`, choices: opcoes, pageSize: 12 }, contexto),
-  );
-}
-
-/** Campo de texto; Esc volta ao menu (Backspace continua apagando). */
-function perguntar(message: string, padrao: string): Promise<string> {
-  return comAtalhoDeVoltar(["escape"], (contexto) =>
-    input({ message: `${message} (Esc para voltar)`, default: padrao }, contexto),
-  );
+async function escolher(message: string, choices: { name: string; value: string }[]): Promise<string> {
+  const escolha = await selecionar({ message, choices });
+  if (escolha === VOLTAR) throw new VoltarAoMenu();
+  return escolha;
 }
 
 async function escolherLivro(cliente: ClienteBiblioteca): Promise<string> {
@@ -76,8 +45,9 @@ const acoes: Record<string, Acao> = {
     const usuario = await escolherUsuario(cliente);
     const livro = await escolherLivro(cliente);
     const { data: hoje } = await cliente.obterHoje();
-    const data = (await perguntar("Data do empréstimo (AAAA-MM-DD):", hoje)).trim();
-    const resposta = await cliente.realizarEmprestimo(usuario, livro, data);
+    const data = await perguntar({ message: "Data do empréstimo (AAAA-MM-DD):", default: hoje });
+    if (data === VOLTAR) throw new VoltarAoMenu();
+    const resposta = await cliente.realizarEmprestimo(usuario, livro, data.trim());
     console.log(
       `✔ Exemplar ${resposta.codigoExemplar} emprestado em ${resposta.dataEmprestimo}. Devolver até ${resposta.dataLimite}.`,
     );

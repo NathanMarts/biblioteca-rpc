@@ -52,7 +52,7 @@ npm run cliente
 | Comando | O que faz |
 |---|---|
 | `npm run servidor` | Sobe o servidor gRPC. Na primeira execução, cria o banco com os dados de demonstração. |
-| `npm run cliente` | Abre o menu interativo do cliente. Navegue com as setas e confirme com Enter. |
+| `npm run cliente` | Abre o menu interativo do cliente. Navegue com as setas, confirme com Enter e use Esc (ou Backspace, nas listas) para voltar ao menu. |
 | `npm run reset` | Apaga o banco e o recria com os dados de demonstração. Rode com o servidor parado. |
 | `npm test` | Roda os testes automatizados. |
 | `npm run typecheck` | Verifica os tipos do TypeScript. |

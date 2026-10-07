@@ -20,6 +20,11 @@ service Biblioteca {
   //        FAILED_PRECONDITION "Usuário já possui um exemplar deste livro" /
   //          "Usuário com limite de empréstimos atingido" / "Livro indisponível".
   rpc RealizarEmprestimo(RealizarEmprestimoRequest) returns (RealizarEmprestimoResponse);
+
+  // Registra a Devolução do Exemplar do Livro que está com o Usuário, na data de hoje do servidor.
+  // Erros: NOT_FOUND "Usuário não encontrado" / "Livro não encontrado" / "Empréstimo não encontrado";
+  //        FAILED_PRECONDITION "Livro já devolvido".
+  rpc DevolverLivro(DevolverLivroRequest) returns (DevolverLivroResponse);
 }
 
 message Usuario {
@@ -75,4 +80,14 @@ message RealizarEmprestimoResponse {
   string codigo_exemplar = 1;
   string data_emprestimo = 2;
   string data_limite = 3;     // data_emprestimo + 7 dias
+}
+
+message DevolverLivroRequest {
+  string codigo_usuario = 1;
+  string codigo_livro = 2;
+}
+
+message DevolverLivroResponse {
+  string codigo_exemplar = 1;
+  string data_devolucao = 2;
 }

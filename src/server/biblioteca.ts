@@ -112,6 +112,27 @@ export class Biblioteca {
     return emprestar();
   }
 
+  devolverLivro(codigoUsuario: string, codigoLivro: string) {
+    const devolver = this.db.transaction(() => {
+      this.buscarUsuario(codigoUsuario);
+      this.buscarLivro(codigoLivro);
+      const ativo = this.emprestimoAtivo(codigoUsuario, codigoLivro);
+      if (!ativo) {
+        const jaTeve = this.db
+          .prepare(
+            `SELECT 1 FROM emprestimo a JOIN exemplar e ON e.codigo = a.codigo_exemplar
+             WHERE a.codigo_usuario = ? AND e.codigo_livro = ?`,
+          )
+          .get(codigoUsuario, codigoLivro);
+        throw jaTeve ? precondicao("Livro já devolvido") : naoEncontrado("Empréstimo não encontrado");
+      }
+      const dataDevolucao = this.hoje();
+      this.db.prepare("UPDATE emprestimo SET data_devolucao = ? WHERE id = ?").run(dataDevolucao, ativo.id);
+      return { codigoExemplar: ativo.codigoExemplar, dataDevolucao };
+    });
+    return devolver();
+  }
+
   private buscarUsuario(codigoUsuario: string): Usuario {
     const usuario = this.db
       .prepare("SELECT codigo, nome FROM usuario WHERE codigo = ?")

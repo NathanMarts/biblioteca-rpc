@@ -35,6 +35,9 @@ export async function iniciarServidor(config: ConfiguracaoServidor): Promise<Ser
     realizarEmprestimo: unario("RealizarEmprestimo", (req) =>
       biblioteca.realizarEmprestimo(req.codigoUsuario, req.codigoLivro, req.dataEmprestimo),
     ),
+    devolverLivro: unario("DevolverLivro", (req) =>
+      biblioteca.devolverLivro(req.codigoUsuario, req.codigoLivro),
+    ),
   };
 
   const server = new grpc.Server();

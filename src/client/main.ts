@@ -40,6 +40,12 @@ const acoes: Record<string, Acao> = {
     const r = await cliente.realizarEmprestimo(usuario, livro, data.trim());
     console.log(`✔ Exemplar ${r.codigoExemplar} emprestado em ${r.dataEmprestimo}. Devolver até ${r.dataLimite}.`);
   },
+  "Devolver livro": async (cliente) => {
+    const usuario = await escolherUsuario(cliente);
+    const livro = await escolherLivro(cliente);
+    const r = await cliente.devolverLivro(usuario, livro);
+    console.log(`✔ Exemplar ${r.codigoExemplar} devolvido em ${r.dataDevolucao}.`);
+  },
   "Listar livros": async (cliente) => {
     const { livros } = await cliente.listarLivros();
     console.log(

@@ -86,6 +86,16 @@ export interface RealizarEmprestimoResponse {
   dataLimite: string;
 }
 
+export interface DevolverLivroRequest {
+  codigoUsuario: string;
+  codigoLivro: string;
+}
+
+export interface DevolverLivroResponse {
+  codigoExemplar: string;
+  dataDevolucao: string;
+}
+
 function createBaseUsuario(): Usuario {
   return { codigo: "", nome: "" };
 }
@@ -1075,6 +1085,192 @@ export const RealizarEmprestimoResponse: MessageFns<RealizarEmprestimoResponse> 
   },
 };
 
+function createBaseDevolverLivroRequest(): DevolverLivroRequest {
+  return { codigoUsuario: "", codigoLivro: "" };
+}
+
+export const DevolverLivroRequest: MessageFns<DevolverLivroRequest> = {
+  encode(message: DevolverLivroRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.codigoUsuario !== "") {
+      writer.uint32(10).string(message.codigoUsuario);
+    }
+    if (message.codigoLivro !== "") {
+      writer.uint32(18).string(message.codigoLivro);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DevolverLivroRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseDevolverLivroRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.codigoUsuario = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.codigoLivro = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): DevolverLivroRequest {
+    return {
+      codigoUsuario: isSet(object.codigoUsuario)
+        ? globalThis.String(object.codigoUsuario)
+        : isSet(object.codigo_usuario)
+        ? globalThis.String(object.codigo_usuario)
+        : "",
+      codigoLivro: isSet(object.codigoLivro)
+        ? globalThis.String(object.codigoLivro)
+        : isSet(object.codigo_livro)
+        ? globalThis.String(object.codigo_livro)
+        : "",
+    };
+  },
+
+  toJSON(message: DevolverLivroRequest): unknown {
+    const obj: any = {};
+    if (message.codigoUsuario !== "") {
+      obj.codigoUsuario = message.codigoUsuario;
+    }
+    if (message.codigoLivro !== "") {
+      obj.codigoLivro = message.codigoLivro;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<DevolverLivroRequest>, I>>(base?: I): DevolverLivroRequest {
+    return DevolverLivroRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<DevolverLivroRequest>, I>>(object: I): DevolverLivroRequest {
+    const message = createBaseDevolverLivroRequest();
+    message.codigoUsuario = object.codigoUsuario ?? "";
+    message.codigoLivro = object.codigoLivro ?? "";
+    return message;
+  },
+};
+
+function createBaseDevolverLivroResponse(): DevolverLivroResponse {
+  return { codigoExemplar: "", dataDevolucao: "" };
+}
+
+export const DevolverLivroResponse: MessageFns<DevolverLivroResponse> = {
+  encode(message: DevolverLivroResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.codigoExemplar !== "") {
+      writer.uint32(10).string(message.codigoExemplar);
+    }
+    if (message.dataDevolucao !== "") {
+      writer.uint32(18).string(message.dataDevolucao);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DevolverLivroResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseDevolverLivroResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.codigoExemplar = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.dataDevolucao = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): DevolverLivroResponse {
+    return {
+      codigoExemplar: isSet(object.codigoExemplar)
+        ? globalThis.String(object.codigoExemplar)
+        : isSet(object.codigo_exemplar)
+        ? globalThis.String(object.codigo_exemplar)
+        : "",
+      dataDevolucao: isSet(object.dataDevolucao)
+        ? globalThis.String(object.dataDevolucao)
+        : isSet(object.data_devolucao)
+        ? globalThis.String(object.data_devolucao)
+        : "",
+    };
+  },
+
+  toJSON(message: DevolverLivroResponse): unknown {
+    const obj: any = {};
+    if (message.codigoExemplar !== "") {
+      obj.codigoExemplar = message.codigoExemplar;
+    }
+    if (message.dataDevolucao !== "") {
+      obj.dataDevolucao = message.dataDevolucao;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<DevolverLivroResponse>, I>>(base?: I): DevolverLivroResponse {
+    return DevolverLivroResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<DevolverLivroResponse>, I>>(object: I): DevolverLivroResponse {
+    const message = createBaseDevolverLivroResponse();
+    message.codigoExemplar = object.codigoExemplar ?? "";
+    message.dataDevolucao = object.dataDevolucao ?? "";
+    return message;
+  },
+};
+
 /** Serviço de empréstimo de livros de uma biblioteca. */
 export type BibliotecaService = typeof BibliotecaService;
 export const BibliotecaService = {
@@ -1134,6 +1330,21 @@ export const BibliotecaService = {
       Buffer.from(RealizarEmprestimoResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer): RealizarEmprestimoResponse => RealizarEmprestimoResponse.decode(value),
   },
+  /**
+   * Registra a Devolução do Exemplar do Livro que está com o Usuário, na data de hoje do servidor.
+   * Erros: NOT_FOUND "Usuário não encontrado" / "Livro não encontrado" / "Empréstimo não encontrado";
+   *        FAILED_PRECONDITION "Livro já devolvido".
+   */
+  devolverLivro: {
+    path: "/biblioteca.Biblioteca/DevolverLivro" as const,
+    requestStream: false as const,
+    responseStream: false as const,
+    requestSerialize: (value: DevolverLivroRequest): Buffer => Buffer.from(DevolverLivroRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): DevolverLivroRequest => DevolverLivroRequest.decode(value),
+    responseSerialize: (value: DevolverLivroResponse): Buffer =>
+      Buffer.from(DevolverLivroResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer): DevolverLivroResponse => DevolverLivroResponse.decode(value),
+  },
 } as const;
 
 export interface BibliotecaServer extends UntypedServiceImplementation {
@@ -1154,6 +1365,12 @@ export interface BibliotecaServer extends UntypedServiceImplementation {
    *          "Usuário com limite de empréstimos atingido" / "Livro indisponível".
    */
   realizarEmprestimo: handleUnaryCall<RealizarEmprestimoRequest, RealizarEmprestimoResponse>;
+  /**
+   * Registra a Devolução do Exemplar do Livro que está com o Usuário, na data de hoje do servidor.
+   * Erros: NOT_FOUND "Usuário não encontrado" / "Livro não encontrado" / "Empréstimo não encontrado";
+   *        FAILED_PRECONDITION "Livro já devolvido".
+   */
+  devolverLivro: handleUnaryCall<DevolverLivroRequest, DevolverLivroResponse>;
 }
 
 export interface BibliotecaClient extends Client {
@@ -1229,6 +1446,26 @@ export interface BibliotecaClient extends Client {
     metadata: Metadata,
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: RealizarEmprestimoResponse) => void,
+  ): ClientUnaryCall;
+  /**
+   * Registra a Devolução do Exemplar do Livro que está com o Usuário, na data de hoje do servidor.
+   * Erros: NOT_FOUND "Usuário não encontrado" / "Livro não encontrado" / "Empréstimo não encontrado";
+   *        FAILED_PRECONDITION "Livro já devolvido".
+   */
+  devolverLivro(
+    request: DevolverLivroRequest,
+    callback: (error: ServiceError | null, response: DevolverLivroResponse) => void,
+  ): ClientUnaryCall;
+  devolverLivro(
+    request: DevolverLivroRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: DevolverLivroResponse) => void,
+  ): ClientUnaryCall;
+  devolverLivro(
+    request: DevolverLivroRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: DevolverLivroResponse) => void,
   ): ClientUnaryCall;
 }
 

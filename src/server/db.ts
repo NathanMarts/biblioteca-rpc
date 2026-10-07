@@ -1,0 +1,65 @@
+import Database from "better-sqlite3";
+import type { DadosIniciais } from "./dados.js";
+
+export type Db = Database.Database;
+
+const SCHEMA = `
+  CREATE TABLE IF NOT EXISTS usuario (
+    codigo TEXT PRIMARY KEY,
+    nome   TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS livro (
+    codigo TEXT PRIMARY KEY,
+    titulo TEXT NOT NULL,
+    autor  TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS exemplar (
+    codigo       TEXT PRIMARY KEY,
+    codigo_livro TEXT NOT NULL REFERENCES livro(codigo),
+    numero       INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS emprestimo (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    codigo_exemplar TEXT NOT NULL REFERENCES exemplar(codigo),
+    codigo_usuario  TEXT NOT NULL REFERENCES usuario(codigo),
+    data_emprestimo TEXT NOT NULL,
+    data_devolucao  TEXT
+  );
+`;
+
+/** Abre o banco (arquivo ou ":memory:"), cria o schema e carrega os dados iniciais se estiver vazio. */
+export function abrirBanco(caminho: string, dadosIniciais: DadosIniciais): Db {
+  const db = new Database(caminho);
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+  db.exec(SCHEMA);
+  if (estaVazio(db)) carregarDados(db, dadosIniciais);
+  return db;
+}
+
+function estaVazio(db: Db): boolean {
+  const { total } = db.prepare("SELECT COUNT(*) AS total FROM usuario").get() as { total: number };
+  return total === 0;
+}
+
+function carregarDados(db: Db, dados: DadosIniciais): void {
+  const inserirUsuario = db.prepare("INSERT INTO usuario (codigo, nome) VALUES (?, ?)");
+  const inserirLivro = db.prepare("INSERT INTO livro (codigo, titulo, autor) VALUES (?, ?, ?)");
+  const inserirExemplar = db.prepare(
+    "INSERT INTO exemplar (codigo, codigo_livro, numero) VALUES (?, ?, ?)",
+  );
+  const inserirEmprestimo = db.prepare(
+    `INSERT INTO emprestimo (codigo_exemplar, codigo_usuario, data_emprestimo, data_devolucao)
+     VALUES (?, ?, ?, ?)`,
+  );
+  db.transaction(() => {
+    for (const u of dados.usuarios) inserirUsuario.run(u.codigo, u.nome);
+    for (const l of dados.livros) {
+      inserirLivro.run(l.codigo, l.titulo, l.autor);
+      for (let n = 1; n <= l.exemplares; n++) inserirExemplar.run(`${l.codigo}-${n}`, l.codigo, n);
+    }
+    for (const e of dados.emprestimos) {
+      inserirEmprestimo.run(e.exemplar, e.usuario, e.dataEmprestimo, e.dataDevolucao ?? null);
+    }
+  })();
+}

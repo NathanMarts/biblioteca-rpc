@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package biblioteca;
+
+// Serviço de empréstimo de livros de uma biblioteca.
+service Biblioteca {
+  // Lista os Usuários cadastrados.
+  rpc ListarUsuarios(ListarUsuariosRequest) returns (ListarUsuariosResponse);
+}
+
+message Usuario {
+  string codigo = 1; // ex.: "U001"
+  string nome = 2;
+}
+
+message ListarUsuariosRequest {}
+
+message ListarUsuariosResponse {
+  repeated Usuario usuarios = 1;
+}

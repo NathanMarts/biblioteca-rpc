@@ -12,7 +12,7 @@ execFileSync(
   [
     `--plugin=protoc-gen-ts_proto=${plugin}`,
     "--ts_proto_out=src/generated",
-    "--ts_proto_opt=outputServices=grpc-js,esModuleInterop=true,importSuffix=.js,useDate=false",
+    "--ts_proto_opt=outputServices=grpc-js,esModuleInterop=true,importSuffix=.js,useDate=false,removeEnumPrefix=true",
     "--proto_path=proto",
     "biblioteca.proto",
   ],

@@ -1,3 +1,4 @@
+import { Situacao } from "../generated/biblioteca.js";
 import type { Db } from "./db.js";
 import { ehDataValida, somarDias } from "./datas.js";
 import { argumentoInvalido, naoEncontrado, precondicao } from "./erros.js";
@@ -131,6 +132,26 @@ export class Biblioteca {
       return { codigoExemplar: ativo.codigoExemplar, dataDevolucao };
     });
     return devolver();
+  }
+
+  consultarEmprestimosUsuario(codigoUsuario: string) {
+    this.buscarUsuario(codigoUsuario);
+    const ativos = this.db
+      .prepare(
+        `SELECT l.codigo AS codigoLivro, l.titulo, e.codigo AS codigoExemplar,
+                a.data_emprestimo AS dataEmprestimo
+         FROM emprestimo a
+         JOIN exemplar e ON e.codigo = a.codigo_exemplar
+         JOIN livro l ON l.codigo = e.codigo_livro
+         WHERE a.codigo_usuario = ? AND a.data_devolucao IS NULL
+         ORDER BY a.data_emprestimo, e.codigo`,
+      )
+      .all(codigoUsuario) as { codigoLivro: string; titulo: string; codigoExemplar: string; dataEmprestimo: string }[];
+    const hoje = this.hoje();
+    return ativos.map((a) => {
+      const dataLimite = somarDias(a.dataEmprestimo, PRAZO_EM_DIAS);
+      return { ...a, dataLimite, situacao: hoje > dataLimite ? Situacao.ATRASADO : Situacao.NO_PRAZO };
+    });
   }
 
   private buscarUsuario(codigoUsuario: string): Usuario {

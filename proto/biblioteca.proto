@@ -25,6 +25,11 @@ service Biblioteca {
   // Erros: NOT_FOUND "Usuário não encontrado" / "Livro não encontrado" / "Empréstimo não encontrado";
   //        FAILED_PRECONDITION "Livro já devolvido".
   rpc DevolverLivro(DevolverLivroRequest) returns (DevolverLivroResponse);
+
+  // Lista os Empréstimos ativos do Usuário, com data limite e situação (no prazo/atrasado).
+  // Erros: NOT_FOUND "Usuário não encontrado".
+  rpc ConsultarEmprestimosUsuario(ConsultarEmprestimosUsuarioRequest)
+      returns (ConsultarEmprestimosUsuarioResponse);
 }
 
 message Usuario {
@@ -47,6 +52,13 @@ message Exemplar {
   string codigo_usuario = 3;
   string nome_usuario = 4;
   string data_emprestimo = 5; // AAAA-MM-DD
+}
+
+// Situação de um Empréstimo ativo em relação à data de hoje do servidor.
+enum Situacao {
+  SITUACAO_NAO_ESPECIFICADA = 0;
+  SITUACAO_NO_PRAZO = 1; // hoje <= data limite
+  SITUACAO_ATRASADO = 2; // hoje > data limite
 }
 
 message ListarUsuariosRequest {}
@@ -90,4 +102,21 @@ message DevolverLivroRequest {
 message DevolverLivroResponse {
   string codigo_exemplar = 1;
   string data_devolucao = 2;
+}
+
+message ConsultarEmprestimosUsuarioRequest {
+  string codigo_usuario = 1;
+}
+
+message EmprestimoDoUsuario {
+  string codigo_livro = 1;
+  string titulo = 2;
+  string codigo_exemplar = 3;
+  string data_emprestimo = 4;
+  string data_limite = 5;
+  Situacao situacao = 6;
+}
+
+message ConsultarEmprestimosUsuarioResponse {
+  repeated EmprestimoDoUsuario emprestimos = 1; // vazia se não houver Empréstimos ativos
 }

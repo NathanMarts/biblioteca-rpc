@@ -1,7 +1,7 @@
 import { status, type ServiceError } from "@grpc/grpc-js";
 import { input, select } from "@inquirer/prompts";
 import { ENDERECO } from "../config.js";
-import type { Exemplar } from "../generated/biblioteca.js";
+import { Situacao, type Exemplar } from "../generated/biblioteca.js";
 import { relogioDoAmbiente } from "../server/relogio.js";
 import { criarCliente, type ClienteBiblioteca } from "./cliente.js";
 import { tabela } from "./tabela.js";
@@ -45,6 +45,26 @@ const acoes: Record<string, Acao> = {
     const livro = await escolherLivro(cliente);
     const r = await cliente.devolverLivro(usuario, livro);
     console.log(`✔ Exemplar ${r.codigoExemplar} devolvido em ${r.dataDevolucao}.`);
+  },
+  "Empréstimos do usuário": async (cliente) => {
+    const { emprestimos } = await cliente.consultarEmprestimosUsuario(await escolherUsuario(cliente));
+    if (emprestimos.length === 0) {
+      console.log("Nenhum empréstimo encontrado para o usuário");
+      return;
+    }
+    console.log(
+      tabela(
+        ["Livro", "Título", "Exemplar", "Emprestado em", "Devolver até", "Situação"],
+        emprestimos.map((e) => [
+          e.codigoLivro,
+          e.titulo,
+          e.codigoExemplar,
+          e.dataEmprestimo,
+          e.dataLimite,
+          e.situacao === Situacao.ATRASADO ? "Atrasado" : "No prazo",
+        ]),
+      ),
+    );
   },
   "Listar livros": async (cliente) => {
     const { livros } = await cliente.listarLivros();

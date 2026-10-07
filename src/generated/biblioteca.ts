@@ -21,6 +21,48 @@ import {
 
 export const protobufPackage = "biblioteca";
 
+/** Situação de um Empréstimo ativo em relação à data de hoje do servidor. */
+export enum Situacao {
+  NAO_ESPECIFICADA = 0,
+  /** NO_PRAZO - hoje <= data limite */
+  NO_PRAZO = 1,
+  /** ATRASADO - hoje > data limite */
+  ATRASADO = 2,
+  UNRECOGNIZED = -1,
+}
+
+export function situacaoFromJSON(object: any): Situacao {
+  switch (object) {
+    case 0:
+    case "SITUACAO_NAO_ESPECIFICADA":
+      return Situacao.NAO_ESPECIFICADA;
+    case 1:
+    case "SITUACAO_NO_PRAZO":
+      return Situacao.NO_PRAZO;
+    case 2:
+    case "SITUACAO_ATRASADO":
+      return Situacao.ATRASADO;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return Situacao.UNRECOGNIZED;
+  }
+}
+
+export function situacaoToJSON(object: Situacao): string {
+  switch (object) {
+    case Situacao.NAO_ESPECIFICADA:
+      return "SITUACAO_NAO_ESPECIFICADA";
+    case Situacao.NO_PRAZO:
+      return "SITUACAO_NO_PRAZO";
+    case Situacao.ATRASADO:
+      return "SITUACAO_ATRASADO";
+    case Situacao.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 export interface Usuario {
   /** ex.: "U001" */
   codigo: string;
@@ -94,6 +136,24 @@ export interface DevolverLivroRequest {
 export interface DevolverLivroResponse {
   codigoExemplar: string;
   dataDevolucao: string;
+}
+
+export interface ConsultarEmprestimosUsuarioRequest {
+  codigoUsuario: string;
+}
+
+export interface EmprestimoDoUsuario {
+  codigoLivro: string;
+  titulo: string;
+  codigoExemplar: string;
+  dataEmprestimo: string;
+  dataLimite: string;
+  situacao: Situacao;
+}
+
+export interface ConsultarEmprestimosUsuarioResponse {
+  /** vazia se não houver Empréstimos ativos */
+  emprestimos: EmprestimoDoUsuario[];
 }
 
 function createBaseUsuario(): Usuario {
@@ -1271,6 +1331,323 @@ export const DevolverLivroResponse: MessageFns<DevolverLivroResponse> = {
   },
 };
 
+function createBaseConsultarEmprestimosUsuarioRequest(): ConsultarEmprestimosUsuarioRequest {
+  return { codigoUsuario: "" };
+}
+
+export const ConsultarEmprestimosUsuarioRequest: MessageFns<ConsultarEmprestimosUsuarioRequest> = {
+  encode(message: ConsultarEmprestimosUsuarioRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.codigoUsuario !== "") {
+      writer.uint32(10).string(message.codigoUsuario);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ConsultarEmprestimosUsuarioRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseConsultarEmprestimosUsuarioRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.codigoUsuario = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): ConsultarEmprestimosUsuarioRequest {
+    return {
+      codigoUsuario: isSet(object.codigoUsuario)
+        ? globalThis.String(object.codigoUsuario)
+        : isSet(object.codigo_usuario)
+        ? globalThis.String(object.codigo_usuario)
+        : "",
+    };
+  },
+
+  toJSON(message: ConsultarEmprestimosUsuarioRequest): unknown {
+    const obj: any = {};
+    if (message.codigoUsuario !== "") {
+      obj.codigoUsuario = message.codigoUsuario;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ConsultarEmprestimosUsuarioRequest>, I>>(
+    base?: I,
+  ): ConsultarEmprestimosUsuarioRequest {
+    return ConsultarEmprestimosUsuarioRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ConsultarEmprestimosUsuarioRequest>, I>>(
+    object: I,
+  ): ConsultarEmprestimosUsuarioRequest {
+    const message = createBaseConsultarEmprestimosUsuarioRequest();
+    message.codigoUsuario = object.codigoUsuario ?? "";
+    return message;
+  },
+};
+
+function createBaseEmprestimoDoUsuario(): EmprestimoDoUsuario {
+  return { codigoLivro: "", titulo: "", codigoExemplar: "", dataEmprestimo: "", dataLimite: "", situacao: 0 };
+}
+
+export const EmprestimoDoUsuario: MessageFns<EmprestimoDoUsuario> = {
+  encode(message: EmprestimoDoUsuario, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.codigoLivro !== "") {
+      writer.uint32(10).string(message.codigoLivro);
+    }
+    if (message.titulo !== "") {
+      writer.uint32(18).string(message.titulo);
+    }
+    if (message.codigoExemplar !== "") {
+      writer.uint32(26).string(message.codigoExemplar);
+    }
+    if (message.dataEmprestimo !== "") {
+      writer.uint32(34).string(message.dataEmprestimo);
+    }
+    if (message.dataLimite !== "") {
+      writer.uint32(42).string(message.dataLimite);
+    }
+    if (message.situacao !== 0) {
+      writer.uint32(48).int32(message.situacao);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EmprestimoDoUsuario {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseEmprestimoDoUsuario();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.codigoLivro = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.titulo = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.codigoExemplar = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.dataEmprestimo = reader.string();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.dataLimite = reader.string();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.situacao = reader.int32() as any;
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): EmprestimoDoUsuario {
+    return {
+      codigoLivro: isSet(object.codigoLivro)
+        ? globalThis.String(object.codigoLivro)
+        : isSet(object.codigo_livro)
+        ? globalThis.String(object.codigo_livro)
+        : "",
+      titulo: isSet(object.titulo) ? globalThis.String(object.titulo) : "",
+      codigoExemplar: isSet(object.codigoExemplar)
+        ? globalThis.String(object.codigoExemplar)
+        : isSet(object.codigo_exemplar)
+        ? globalThis.String(object.codigo_exemplar)
+        : "",
+      dataEmprestimo: isSet(object.dataEmprestimo)
+        ? globalThis.String(object.dataEmprestimo)
+        : isSet(object.data_emprestimo)
+        ? globalThis.String(object.data_emprestimo)
+        : "",
+      dataLimite: isSet(object.dataLimite)
+        ? globalThis.String(object.dataLimite)
+        : isSet(object.data_limite)
+        ? globalThis.String(object.data_limite)
+        : "",
+      situacao: isSet(object.situacao) ? situacaoFromJSON(object.situacao) : 0,
+    };
+  },
+
+  toJSON(message: EmprestimoDoUsuario): unknown {
+    const obj: any = {};
+    if (message.codigoLivro !== "") {
+      obj.codigoLivro = message.codigoLivro;
+    }
+    if (message.titulo !== "") {
+      obj.titulo = message.titulo;
+    }
+    if (message.codigoExemplar !== "") {
+      obj.codigoExemplar = message.codigoExemplar;
+    }
+    if (message.dataEmprestimo !== "") {
+      obj.dataEmprestimo = message.dataEmprestimo;
+    }
+    if (message.dataLimite !== "") {
+      obj.dataLimite = message.dataLimite;
+    }
+    if (message.situacao !== 0) {
+      obj.situacao = situacaoToJSON(message.situacao);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<EmprestimoDoUsuario>, I>>(base?: I): EmprestimoDoUsuario {
+    return EmprestimoDoUsuario.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EmprestimoDoUsuario>, I>>(object: I): EmprestimoDoUsuario {
+    const message = createBaseEmprestimoDoUsuario();
+    message.codigoLivro = object.codigoLivro ?? "";
+    message.titulo = object.titulo ?? "";
+    message.codigoExemplar = object.codigoExemplar ?? "";
+    message.dataEmprestimo = object.dataEmprestimo ?? "";
+    message.dataLimite = object.dataLimite ?? "";
+    message.situacao = object.situacao ?? 0;
+    return message;
+  },
+};
+
+function createBaseConsultarEmprestimosUsuarioResponse(): ConsultarEmprestimosUsuarioResponse {
+  return { emprestimos: [] };
+}
+
+export const ConsultarEmprestimosUsuarioResponse: MessageFns<ConsultarEmprestimosUsuarioResponse> = {
+  encode(message: ConsultarEmprestimosUsuarioResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.emprestimos) {
+      EmprestimoDoUsuario.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ConsultarEmprestimosUsuarioResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseConsultarEmprestimosUsuarioResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.emprestimos.push(EmprestimoDoUsuario.decode(reader, reader.uint32()));
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): ConsultarEmprestimosUsuarioResponse {
+    return {
+      emprestimos: globalThis.Array.isArray(object?.emprestimos)
+        ? object.emprestimos.map((e: any) => EmprestimoDoUsuario.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: ConsultarEmprestimosUsuarioResponse): unknown {
+    const obj: any = {};
+    if (message.emprestimos?.length) {
+      obj.emprestimos = message.emprestimos.map((e) => EmprestimoDoUsuario.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ConsultarEmprestimosUsuarioResponse>, I>>(
+    base?: I,
+  ): ConsultarEmprestimosUsuarioResponse {
+    return ConsultarEmprestimosUsuarioResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ConsultarEmprestimosUsuarioResponse>, I>>(
+    object: I,
+  ): ConsultarEmprestimosUsuarioResponse {
+    const message = createBaseConsultarEmprestimosUsuarioResponse();
+    message.emprestimos = object.emprestimos?.map((e) => EmprestimoDoUsuario.fromPartial(e)) || [];
+    return message;
+  },
+};
+
 /** Serviço de empréstimo de livros de uma biblioteca. */
 export type BibliotecaService = typeof BibliotecaService;
 export const BibliotecaService = {
@@ -1345,6 +1722,23 @@ export const BibliotecaService = {
       Buffer.from(DevolverLivroResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer): DevolverLivroResponse => DevolverLivroResponse.decode(value),
   },
+  /**
+   * Lista os Empréstimos ativos do Usuário, com data limite e situação (no prazo/atrasado).
+   * Erros: NOT_FOUND "Usuário não encontrado".
+   */
+  consultarEmprestimosUsuario: {
+    path: "/biblioteca.Biblioteca/ConsultarEmprestimosUsuario" as const,
+    requestStream: false as const,
+    responseStream: false as const,
+    requestSerialize: (value: ConsultarEmprestimosUsuarioRequest): Buffer =>
+      Buffer.from(ConsultarEmprestimosUsuarioRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): ConsultarEmprestimosUsuarioRequest =>
+      ConsultarEmprestimosUsuarioRequest.decode(value),
+    responseSerialize: (value: ConsultarEmprestimosUsuarioResponse): Buffer =>
+      Buffer.from(ConsultarEmprestimosUsuarioResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer): ConsultarEmprestimosUsuarioResponse =>
+      ConsultarEmprestimosUsuarioResponse.decode(value),
+  },
 } as const;
 
 export interface BibliotecaServer extends UntypedServiceImplementation {
@@ -1371,6 +1765,11 @@ export interface BibliotecaServer extends UntypedServiceImplementation {
    *        FAILED_PRECONDITION "Livro já devolvido".
    */
   devolverLivro: handleUnaryCall<DevolverLivroRequest, DevolverLivroResponse>;
+  /**
+   * Lista os Empréstimos ativos do Usuário, com data limite e situação (no prazo/atrasado).
+   * Erros: NOT_FOUND "Usuário não encontrado".
+   */
+  consultarEmprestimosUsuario: handleUnaryCall<ConsultarEmprestimosUsuarioRequest, ConsultarEmprestimosUsuarioResponse>;
 }
 
 export interface BibliotecaClient extends Client {
@@ -1466,6 +1865,25 @@ export interface BibliotecaClient extends Client {
     metadata: Metadata,
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: DevolverLivroResponse) => void,
+  ): ClientUnaryCall;
+  /**
+   * Lista os Empréstimos ativos do Usuário, com data limite e situação (no prazo/atrasado).
+   * Erros: NOT_FOUND "Usuário não encontrado".
+   */
+  consultarEmprestimosUsuario(
+    request: ConsultarEmprestimosUsuarioRequest,
+    callback: (error: ServiceError | null, response: ConsultarEmprestimosUsuarioResponse) => void,
+  ): ClientUnaryCall;
+  consultarEmprestimosUsuario(
+    request: ConsultarEmprestimosUsuarioRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: ConsultarEmprestimosUsuarioResponse) => void,
+  ): ClientUnaryCall;
+  consultarEmprestimosUsuario(
+    request: ConsultarEmprestimosUsuarioRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: ConsultarEmprestimosUsuarioResponse) => void,
   ): ClientUnaryCall;
 }
 

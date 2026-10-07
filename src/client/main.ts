@@ -1,5 +1,5 @@
 import { status, type ServiceError } from "@grpc/grpc-js";
-import { input, select, Separator } from "@inquirer/prompts";
+import { input, select } from "@inquirer/prompts";
 import { ENDERECO } from "../config.js";
 import { Situacao, type Exemplar } from "../generated/biblioteca.js";
 import { criarCliente, type ClienteBiblioteca } from "./cliente.js";
@@ -10,17 +10,43 @@ type Acao = (cliente: ClienteBiblioteca) => Promise<void>;
 /** Sinaliza que o operador desistiu da ação e quer voltar ao menu principal. */
 class VoltarAoMenu extends Error {}
 
-const VOLTAR = "__voltar__";
+type Tecla = { name?: string };
 
-/** Lista de seleção com a opção "Voltar ao menu" no fim. */
-async function escolher(message: string, opcoes: { name: string; value: string }[]): Promise<string> {
-  const escolha = await select({
-    message,
-    choices: [...opcoes, new Separator(), { name: "↩ Voltar ao menu", value: VOLTAR }],
-    pageSize: 14,
-  });
-  if (escolha === VOLTAR) throw new VoltarAoMenu();
-  return escolha;
+/**
+ * Executa um prompt que é cancelado quando uma das `teclas` é pressionada,
+ * lançando VoltarAoMenu.
+ */
+async function comAtalhoDeVoltar<T>(
+  teclas: string[],
+  prompt: (contexto: { signal: AbortSignal }) => Promise<T>,
+): Promise<T> {
+  const controle = new AbortController();
+  const aoPressionar = (_: string, tecla?: Tecla) => {
+    if (tecla?.name && teclas.includes(tecla.name)) controle.abort();
+  };
+  process.stdin.on("keypress", aoPressionar);
+  try {
+    return await prompt({ signal: controle.signal });
+  } catch (erro) {
+    if (controle.signal.aborted) throw new VoltarAoMenu();
+    throw erro;
+  } finally {
+    process.stdin.off("keypress", aoPressionar);
+  }
+}
+
+/** Lista de seleção; Esc ou Backspace voltam ao menu. */
+function escolher(message: string, opcoes: { name: string; value: string }[]): Promise<string> {
+  return comAtalhoDeVoltar(["escape", "backspace"], (contexto) =>
+    select({ message: `${message} (Esc para voltar)`, choices: opcoes, pageSize: 12 }, contexto),
+  );
+}
+
+/** Campo de texto; Esc volta ao menu (Backspace continua apagando). */
+function perguntar(message: string, padrao: string): Promise<string> {
+  return comAtalhoDeVoltar(["escape"], (contexto) =>
+    input({ message: `${message} (Esc para voltar)`, default: padrao }, contexto),
+  );
 }
 
 async function escolherLivro(cliente: ClienteBiblioteca): Promise<string> {
@@ -50,8 +76,7 @@ const acoes: Record<string, Acao> = {
     const usuario = await escolherUsuario(cliente);
     const livro = await escolherLivro(cliente);
     const { data: hoje } = await cliente.obterHoje();
-    const data = (await input({ message: "Data do empréstimo (AAAA-MM-DD, ou V para voltar):", default: hoje })).trim();
-    if (data.toUpperCase() === "V") throw new VoltarAoMenu();
+    const data = (await perguntar("Data do empréstimo (AAAA-MM-DD):", hoje)).trim();
     const resposta = await cliente.realizarEmprestimo(usuario, livro, data);
     console.log(
       `✔ Exemplar ${resposta.codigoExemplar} emprestado em ${resposta.dataEmprestimo}. Devolver até ${resposta.dataLimite}.`,

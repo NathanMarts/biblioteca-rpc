@@ -1,5 +1,5 @@
 import { status, type ServiceError } from "@grpc/grpc-js";
-import { select } from "@inquirer/prompts";
+import { input, password, select } from "@inquirer/prompts";
 import { ENDERECO } from "../config.js";
 import { Situacao, type Exemplar } from "../generated/biblioteca.js";
 import { criarCliente, type ClienteBiblioteca } from "./cliente.js";
@@ -143,22 +143,60 @@ function mensagemDeErro(erro: unknown): string {
   return e.details ?? String(erro);
 }
 
+/** Pede login e senha até dar certo; login vazio segue sem Sessão. Devolve o nome de quem entrou. */
+async function entrar(cliente: ClienteBiblioteca): Promise<string | undefined> {
+  while (true) {
+    const login = (await input({ message: "Login do bibliotecário (vazio para seguir sem login):" })).trim();
+    if (!login) return undefined;
+    const senha = await password({ message: "Senha:", mask: "*" });
+    try {
+      const { nome } = await cliente.entrar(login, senha);
+      console.log(`✔ Bem-vindo(a), ${nome}.`);
+      return nome;
+    } catch (erro) {
+      console.log(`✖ ${mensagemDeErro(erro)}`);
+      if ((erro as Partial<ServiceError>).code !== status.UNAUTHENTICATED) return undefined;
+    }
+  }
+}
+
+const ENTRAR = "Entrar";
+const SAIR_DA_SESSAO = "Sair da sessão";
+const SAIR = "Sair";
+
 async function main() {
   const cliente = criarCliente(ENDERECO);
   console.log(`Biblioteca — balcão do bibliotecário (servidor: ${ENDERECO})\n`);
   try {
+    let bibliotecario = await entrar(cliente);
+    console.log();
     while (true) {
+      const sessao = bibliotecario ? `${SAIR_DA_SESSAO} (${bibliotecario})` : ENTRAR;
       const escolha = await select({
-        message: "O que deseja fazer?",
-        choices: [...Object.keys(acoes), "Sair"].map((nome) => ({ name: nome, value: nome })),
+        message: bibliotecario ? `O que deseja fazer, ${bibliotecario}?` : "O que deseja fazer? (sem login)",
+        choices: [...Object.keys(acoes), sessao, SAIR].map((nome) => ({ name: nome, value: nome })),
         pageSize: 12,
       });
-      if (escolha === "Sair") break;
-      try {
-        await acoes[escolha](cliente);
-      } catch (erro) {
-        if (estaSaindo(erro)) throw erro;
-        if (!(erro instanceof VoltarAoMenu)) console.log(`✖ ${mensagemDeErro(erro)}`);
+      if (escolha === SAIR) break;
+      if (escolha === ENTRAR) {
+        bibliotecario = await entrar(cliente);
+      } else if (escolha === sessao) {
+        cliente.sair();
+        bibliotecario = undefined;
+        console.log("✔ Sessão encerrada.");
+      } else {
+        try {
+          await acoes[escolha](cliente);
+        } catch (erro) {
+          if (estaSaindo(erro)) throw erro;
+          if ((erro as Partial<ServiceError>).code === status.UNAUTHENTICATED) {
+            cliente.sair();
+            bibliotecario = undefined;
+            console.log(`✖ ${mensagemDeErro(erro)}. Escolha "${ENTRAR}" no menu para fazer login.`);
+          } else if (!(erro instanceof VoltarAoMenu)) {
+            console.log(`✖ ${mensagemDeErro(erro)}`);
+          }
+        }
       }
       console.log();
     }

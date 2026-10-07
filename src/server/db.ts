@@ -1,9 +1,20 @@
 import Database from "better-sqlite3";
 import type { DadosIniciais } from "./dados.js";
+import { gerarHashDeSenha } from "./senhas.js";
 
 export type Db = Database.Database;
 
 const SCHEMA = `
+  CREATE TABLE IF NOT EXISTS bibliotecario (
+    login      TEXT PRIMARY KEY,
+    nome       TEXT NOT NULL,
+    senha_hash TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS sessao (
+    token     TEXT PRIMARY KEY,
+    login     TEXT NOT NULL REFERENCES bibliotecario(login),
+    expira_em INTEGER NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS usuario (
     codigo TEXT PRIMARY KEY,
     nome   TEXT NOT NULL
@@ -51,6 +62,9 @@ function estaVazio(db: Db): boolean {
 }
 
 function carregarDados(db: Db, dados: DadosIniciais): void {
+  const inserirBibliotecario = db.prepare(
+    "INSERT INTO bibliotecario (login, nome, senha_hash) VALUES (?, ?, ?)",
+  );
   const inserirUsuario = db.prepare("INSERT INTO usuario (codigo, nome) VALUES (?, ?)");
   const inserirLivro = db.prepare("INSERT INTO livro (codigo, titulo, autor) VALUES (?, ?, ?)");
   const inserirExemplar = db.prepare(
@@ -61,6 +75,7 @@ function carregarDados(db: Db, dados: DadosIniciais): void {
      VALUES (?, ?, ?, ?)`,
   );
   db.transaction(() => {
+    for (const b of dados.bibliotecarios) inserirBibliotecario.run(b.login, b.nome, gerarHashDeSenha(b.senha));
     for (const u of dados.usuarios) inserirUsuario.run(u.codigo, u.nome);
     for (const l of dados.livros) {
       inserirLivro.run(l.codigo, l.titulo, l.autor);

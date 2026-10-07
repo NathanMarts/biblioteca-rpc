@@ -7,8 +7,13 @@ import { iniciarServidor } from "../src/server/servidor.js";
 
 export const HOJE = "2026-10-20";
 
+const BIBLIOTECARIO_PADRAO = { login: "teste", nome: "Bibliotecário de Teste", senha: "senha-teste" };
+
 export interface Ambiente {
+  /** Cliente já autenticado com o primeiro bibliotecário dos dados. */
   cliente: ClienteBiblioteca;
+  /** Cria um cliente sem login, encerrado junto com o ambiente. */
+  novoCliente(): ClienteBiblioteca;
   encerrar(): Promise<void>;
 }
 
@@ -16,20 +21,31 @@ export interface Ambiente {
 export async function iniciarTeste(
   dados: Partial<DadosIniciais> = {},
   hoje: string = HOJE,
+  opcoes: { agora?: () => number } = {},
 ): Promise<Ambiente> {
+  const bibliotecarios = dados.bibliotecarios ?? [BIBLIOTECARIO_PADRAO];
   const servidor = await iniciarServidor({
     banco: ":memory:",
     host: "127.0.0.1",
     porta: 0,
     relogio: relogioFixo(hoje),
-    dadosIniciais: { usuarios: [], livros: [], emprestimos: [], ...dados },
+    agora: opcoes.agora,
+    dadosIniciais: { usuarios: [], livros: [], emprestimos: [], ...dados, bibliotecarios },
     log: false,
   });
-  const cliente = criarCliente(servidor.endereco);
+  const clientes: ClienteBiblioteca[] = [];
+  const novoCliente = () => {
+    const cliente = criarCliente(servidor.endereco);
+    clientes.push(cliente);
+    return cliente;
+  };
+  const cliente = novoCliente();
+  if (bibliotecarios.length > 0) await cliente.entrar(bibliotecarios[0].login, bibliotecarios[0].senha);
   return {
     cliente,
+    novoCliente,
     async encerrar() {
-      cliente.fechar();
+      for (const c of clientes) c.fechar();
       await servidor.encerrar();
     },
   };

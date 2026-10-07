@@ -1,10 +1,12 @@
 import * as grpc from "@grpc/grpc-js";
 import { BibliotecaService, Situacao, type BibliotecaServer } from "../generated/biblioteca.js";
+import { Autenticacao } from "./autenticacao.js";
 import { Biblioteca } from "./biblioteca.js";
 import type { DadosIniciais } from "./dados.js";
 import { ehDataValida } from "./datas.js";
 import { abrirBanco } from "./db.js";
 import { ErroBiblioteca, type TipoErro } from "./erros.js";
+import { exigirAutenticacao, METADADO_BIBLIOTECARIO, registrarChamadas } from "./interceptadores.js";
 import type { Relogio } from "./relogio.js";
 
 export interface ConfiguracaoServidor {
@@ -14,6 +16,8 @@ export interface ConfiguracaoServidor {
   /** 0 escolhe uma porta livre. */
   porta: number;
   relogio: Relogio;
+  /** Instante atual em ms, para a validade das Sessões; padrão Date.now. */
+  agora?: () => number;
   dadosIniciais: DadosIniciais;
   /** Registrar cada chamada no console. */
   log: boolean;
@@ -31,13 +35,19 @@ export async function iniciarServidor(config: ConfiguracaoServidor): Promise<Ser
   }
   const db = abrirBanco(config.banco, config.dadosIniciais);
   const biblioteca = new Biblioteca(db, config.relogio);
-  const unario = criarAdaptador(config.log);
+  const autenticacao = new Autenticacao(db, config.agora ?? Date.now);
 
   const implementacao: BibliotecaServer = {
+    entrar: unario("Entrar", (req) => autenticacao.entrar(req.login, req.senha)),
     listarUsuarios: unario("ListarUsuarios", () => ({ usuarios: biblioteca.listarUsuarios() })),
     listarLivros: unario("ListarLivros", () => ({ livros: biblioteca.listarLivros() })),
     obterHoje: unario("ObterHoje", () => ({ data: config.relogio() })),
-    consultarLivro: unario("ConsultarLivro", (req) => biblioteca.consultarLivro(req.codigoLivro)),
+    consultarLivro: unario("ConsultarLivro", (req, { bibliotecario }) => {
+      const { livro, exemplares } = biblioteca.consultarLivro(req.codigoLivro);
+      // Sem login, a consulta é pública: mostra a disponibilidade, mas não quem está com o livro.
+      if (bibliotecario) return { livro, exemplares };
+      return { livro, exemplares: exemplares.map((e) => ({ ...e, codigoUsuario: "", nomeUsuario: "" })) };
+    }),
     realizarEmprestimo: unario("RealizarEmprestimo", (req) =>
       biblioteca.realizarEmprestimo(req.codigoUsuario, req.codigoLivro, req.dataEmprestimo),
     ),
@@ -57,7 +67,16 @@ export async function iniciarServidor(config: ConfiguracaoServidor): Promise<Ser
     })),
   };
 
-  const server = new grpc.Server();
+  const publicos = new Set(
+    [BibliotecaService.entrar, BibliotecaService.obterHoje, BibliotecaService.listarLivros, BibliotecaService.consultarLivro]
+      .map((metodo) => metodo.path),
+  );
+  const server = new grpc.Server({
+    interceptors: [
+      ...(config.log ? [registrarChamadas()] : []),
+      exigirAutenticacao(autenticacao, publicos),
+    ],
+  });
   server.addService(BibliotecaService, implementacao);
   const porta = await new Promise<number>((resolve, reject) =>
     server.bindAsync(
@@ -83,30 +102,34 @@ const STATUS_POR_TIPO: Record<TipoErro, grpc.status> = {
   NAO_ENCONTRADO: grpc.status.NOT_FOUND,
   ARGUMENTO_INVALIDO: grpc.status.INVALID_ARGUMENT,
   PRECONDICAO: grpc.status.FAILED_PRECONDITION,
+  NAO_AUTENTICADO: grpc.status.UNAUTHENTICATED,
 };
 
+/** O que os interceptadores apuraram sobre a chamada. */
+interface Contexto {
+  /** Login do Bibliotecário autenticado, se houver. */
+  bibliotecario?: string;
+}
+
 /**
- * Converte uma função síncrona em handler gRPC unário: registra a chamada e traduz
- * ErroBiblioteca para o status code correspondente, com a mensagem em português.
+ * Converte uma função síncrona em handler gRPC unário, traduzindo ErroBiblioteca para o
+ * status code correspondente, com a mensagem em português.
  */
-function criarAdaptador(log: boolean) {
-  return <Req, Res>(nome: string, executar: (requisicao: Req) => Res): grpc.handleUnaryCall<Req, Res> =>
-    (call, callback) => {
-      const registrar = (resultado: string) => {
-        if (log) console.log(`[RPC] ${nome} ${JSON.stringify(call.request)} → ${resultado}`);
-      };
-      try {
-        const resposta = executar(call.request);
-        registrar("ok");
-        callback(null, resposta);
-      } catch (erro) {
-        if (erro instanceof ErroBiblioteca) {
-          registrar(`${grpc.status[STATUS_POR_TIPO[erro.tipo]]} "${erro.message}"`);
-          callback({ code: STATUS_POR_TIPO[erro.tipo], details: erro.message });
-        } else {
-          registrar(`INTERNAL ${String(erro)}`);
-          callback({ code: grpc.status.INTERNAL, details: "Erro interno do servidor" });
-        }
+function unario<Req, Res>(
+  nome: string,
+  executar: (requisicao: Req, contexto: Contexto) => Res,
+): grpc.handleUnaryCall<Req, Res> {
+  return (call, callback) => {
+    try {
+      const bibliotecario = call.metadata.get(METADADO_BIBLIOTECARIO)[0]?.toString();
+      callback(null, executar(call.request, { bibliotecario }));
+    } catch (erro) {
+      if (erro instanceof ErroBiblioteca) {
+        callback({ code: STATUS_POR_TIPO[erro.tipo], details: erro.message });
+      } else {
+        console.error(`[${nome}] erro inesperado:`, erro);
+        callback({ code: grpc.status.INTERNAL, details: "Erro interno do servidor" });
       }
-    };
+    }
+  };
 }

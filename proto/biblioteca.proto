@@ -6,12 +6,20 @@
 // - Erros de negócio são sinalizados pelo status code do gRPC, com a mensagem em português
 //   no campo "details" (ver docs/adr/0003-erros-como-status-grpc.md).
 // - Consultas sem resultado retornam listas vazias, não erros.
+// - Só Entrar, ObterHoje, ListarLivros e ConsultarLivro são públicos; os demais exigem o token
+//   de Entrar (senão UNAUTHENTICATED "Não autenticado" ou "Sessão expirada"). Sem token,
+//   ConsultarLivro omite quem está com cada Exemplar.
 syntax = "proto3";
 
 package biblioteca;
 
 // Serviço de empréstimo de livros de uma biblioteca.
 service Biblioteca {
+  // Autentica um Bibliotecário e devolve o token da Sessão, que deve ir no metadado
+  // "authorization: Bearer <token>" das chamadas protegidas. (Extra, além do enunciado.)
+  // Erros: UNAUTHENTICATED "Login ou senha inválidos".
+  rpc Entrar(EntrarRequest) returns (EntrarResponse);
+
   // Lista os Usuários cadastrados. (Extra, além do enunciado: alimenta as listas de seleção do cliente.)
   rpc ListarUsuarios(ListarUsuariosRequest) returns (ListarUsuariosResponse);
 
@@ -75,6 +83,17 @@ enum Situacao {
   SITUACAO_NAO_ESPECIFICADA = 0;
   SITUACAO_NO_PRAZO = 1; // hoje <= data limite
   SITUACAO_ATRASADO = 2; // hoje > data limite
+}
+
+message EntrarRequest {
+  string login = 1;
+  string senha = 2;
+}
+
+message EntrarResponse {
+  string token = 1;
+  string nome = 2;
+  string expira_em = 3; // data e hora ISO 8601
 }
 
 message ListarUsuariosRequest {}

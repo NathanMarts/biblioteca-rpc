@@ -12,6 +12,7 @@ import { somarDias } from "./datas.js";
 export function dadosDeDemonstracao(hoje: string): DadosIniciais {
   const diasAtras = (dias: number) => somarDias(hoje, -dias);
   return {
+    bibliotecarios: [{ login: "beatriz", nome: "Beatriz Rocha", senha: "biblioteca" }],
     usuarios: [
       { codigo: "U001", nome: "Ana Souza" },
       { codigo: "U002", nome: "Bruno Lima" },

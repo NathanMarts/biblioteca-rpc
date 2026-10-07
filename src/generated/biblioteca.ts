@@ -30,6 +30,9 @@ export const protobufPackage = "biblioteca";
  * - Erros de negócio são sinalizados pelo status code do gRPC, com a mensagem em português
  *   no campo "details" (ver docs/adr/0003-erros-como-status-grpc.md).
  * - Consultas sem resultado retornam listas vazias, não erros.
+ * - Só Entrar, ObterHoje, ListarLivros e ConsultarLivro são públicos; os demais exigem o token
+ *   de Entrar (senão UNAUTHENTICATED "Não autenticado" ou "Sessão expirada"). Sem token,
+ *   ConsultarLivro omite quem está com cada Exemplar.
  */
 
 /** Situação de um Empréstimo ativo em relação à data de hoje do servidor. */
@@ -100,6 +103,18 @@ export interface Exemplar {
   nomeUsuario: string;
   /** AAAA-MM-DD */
   dataEmprestimo: string;
+}
+
+export interface EntrarRequest {
+  login: string;
+  senha: string;
+}
+
+export interface EntrarResponse {
+  token: string;
+  nome: string;
+  /** data e hora ISO 8601 */
+  expiraEm: string;
 }
 
 export interface ListarUsuariosRequest {
@@ -552,6 +567,196 @@ export const Exemplar: MessageFns<Exemplar> = {
     message.codigoUsuario = object.codigoUsuario ?? "";
     message.nomeUsuario = object.nomeUsuario ?? "";
     message.dataEmprestimo = object.dataEmprestimo ?? "";
+    return message;
+  },
+};
+
+function createBaseEntrarRequest(): EntrarRequest {
+  return { login: "", senha: "" };
+}
+
+export const EntrarRequest: MessageFns<EntrarRequest> = {
+  encode(message: EntrarRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.login !== "") {
+      writer.uint32(10).string(message.login);
+    }
+    if (message.senha !== "") {
+      writer.uint32(18).string(message.senha);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EntrarRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseEntrarRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.login = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.senha = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): EntrarRequest {
+    return {
+      login: isSet(object.login) ? globalThis.String(object.login) : "",
+      senha: isSet(object.senha) ? globalThis.String(object.senha) : "",
+    };
+  },
+
+  toJSON(message: EntrarRequest): unknown {
+    const obj: any = {};
+    if (message.login !== "") {
+      obj.login = message.login;
+    }
+    if (message.senha !== "") {
+      obj.senha = message.senha;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<EntrarRequest>, I>>(base?: I): EntrarRequest {
+    return EntrarRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EntrarRequest>, I>>(object: I): EntrarRequest {
+    const message = createBaseEntrarRequest();
+    message.login = object.login ?? "";
+    message.senha = object.senha ?? "";
+    return message;
+  },
+};
+
+function createBaseEntrarResponse(): EntrarResponse {
+  return { token: "", nome: "", expiraEm: "" };
+}
+
+export const EntrarResponse: MessageFns<EntrarResponse> = {
+  encode(message: EntrarResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.token !== "") {
+      writer.uint32(10).string(message.token);
+    }
+    if (message.nome !== "") {
+      writer.uint32(18).string(message.nome);
+    }
+    if (message.expiraEm !== "") {
+      writer.uint32(26).string(message.expiraEm);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EntrarResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseEntrarResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.token = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.nome = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.expiraEm = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): EntrarResponse {
+    return {
+      token: isSet(object.token) ? globalThis.String(object.token) : "",
+      nome: isSet(object.nome) ? globalThis.String(object.nome) : "",
+      expiraEm: isSet(object.expiraEm)
+        ? globalThis.String(object.expiraEm)
+        : isSet(object.expira_em)
+        ? globalThis.String(object.expira_em)
+        : "",
+    };
+  },
+
+  toJSON(message: EntrarResponse): unknown {
+    const obj: any = {};
+    if (message.token !== "") {
+      obj.token = message.token;
+    }
+    if (message.nome !== "") {
+      obj.nome = message.nome;
+    }
+    if (message.expiraEm !== "") {
+      obj.expiraEm = message.expiraEm;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<EntrarResponse>, I>>(base?: I): EntrarResponse {
+    return EntrarResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EntrarResponse>, I>>(object: I): EntrarResponse {
+    const message = createBaseEntrarResponse();
+    message.token = object.token ?? "";
+    message.nome = object.nome ?? "";
+    message.expiraEm = object.expiraEm ?? "";
     return message;
   },
 };
@@ -2112,6 +2317,20 @@ export const ObterHojeResponse: MessageFns<ObterHojeResponse> = {
 /** Serviço de empréstimo de livros de uma biblioteca. */
 export type BibliotecaService = typeof BibliotecaService;
 export const BibliotecaService = {
+  /**
+   * Autentica um Bibliotecário e devolve o token da Sessão, que deve ir no metadado
+   * "authorization: Bearer <token>" das chamadas protegidas. (Extra, além do enunciado.)
+   * Erros: UNAUTHENTICATED "Login ou senha inválidos".
+   */
+  entrar: {
+    path: "/biblioteca.Biblioteca/Entrar" as const,
+    requestStream: false as const,
+    responseStream: false as const,
+    requestSerialize: (value: EntrarRequest): Buffer => Buffer.from(EntrarRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): EntrarRequest => EntrarRequest.decode(value),
+    responseSerialize: (value: EntrarResponse): Buffer => Buffer.from(EntrarResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer): EntrarResponse => EntrarResponse.decode(value),
+  },
   /** Lista os Usuários cadastrados. (Extra, além do enunciado: alimenta as listas de seleção do cliente.) */
   listarUsuarios: {
     path: "/biblioteca.Biblioteca/ListarUsuarios" as const,
@@ -2230,6 +2449,12 @@ export const BibliotecaService = {
 } as const;
 
 export interface BibliotecaServer extends UntypedServiceImplementation {
+  /**
+   * Autentica um Bibliotecário e devolve o token da Sessão, que deve ir no metadado
+   * "authorization: Bearer <token>" das chamadas protegidas. (Extra, além do enunciado.)
+   * Erros: UNAUTHENTICATED "Login ou senha inválidos".
+   */
+  entrar: handleUnaryCall<EntrarRequest, EntrarResponse>;
   /** Lista os Usuários cadastrados. (Extra, além do enunciado: alimenta as listas de seleção do cliente.) */
   listarUsuarios: handleUnaryCall<ListarUsuariosRequest, ListarUsuariosResponse>;
   /** Lista os Livros do acervo com a disponibilidade de Exemplares. (Extra, além do enunciado.) */
@@ -2268,6 +2493,26 @@ export interface BibliotecaServer extends UntypedServiceImplementation {
 }
 
 export interface BibliotecaClient extends Client {
+  /**
+   * Autentica um Bibliotecário e devolve o token da Sessão, que deve ir no metadado
+   * "authorization: Bearer <token>" das chamadas protegidas. (Extra, além do enunciado.)
+   * Erros: UNAUTHENTICATED "Login ou senha inválidos".
+   */
+  entrar(
+    request: EntrarRequest,
+    callback: (error: ServiceError | null, response: EntrarResponse) => void,
+  ): ClientUnaryCall;
+  entrar(
+    request: EntrarRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: EntrarResponse) => void,
+  ): ClientUnaryCall;
+  entrar(
+    request: EntrarRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: EntrarResponse) => void,
+  ): ClientUnaryCall;
   /** Lista os Usuários cadastrados. (Extra, além do enunciado: alimenta as listas de seleção do cliente.) */
   listarUsuarios(
     request: ListarUsuariosRequest,

@@ -5,6 +5,7 @@ import {
   type ConsultarEmprestimosUsuarioResponse,
   type ConsultarLivroResponse,
   type DevolverLivroResponse,
+  type EntrarResponse,
   type ListarLivrosResponse,
   type ListarUsuariosResponse,
   type ObterHojeResponse,
@@ -33,8 +34,26 @@ function chamar<Req, Res>(metodo: Metodo<Req, Res>, requisicao: Req) {
   );
 }
 
+/** Interceptador (middleware) do cliente: anexa o token da Sessão a toda chamada. */
+function anexarToken(obterToken: () => string | undefined): grpc.Interceptor {
+  return (opcoes, proximaChamada) =>
+    new grpc.InterceptingCall(proximaChamada(opcoes), {
+      start: (metadados, listener, next) => {
+        const token = obterToken();
+        if (token) metadados.set("authorization", `Bearer ${token}`);
+        next(metadados, listener);
+      },
+    });
+}
+
 /** Cliente gRPC tipado da Biblioteca, com chamadas baseadas em Promise. */
 export interface ClienteBiblioteca {
+  /** Autentica e passa a enviar o token da Sessão nas chamadas seguintes. */
+  entrar(login: string, senha: string): Promise<EntrarResponse>;
+  /** Usa um token obtido por outro meio (ex.: guardado de uma Sessão anterior). */
+  usarToken(token: string): void;
+  /** Esquece o token: as chamadas seguintes são anônimas. */
+  sair(): void;
   listarUsuarios(): Promise<ListarUsuariosResponse>;
   listarLivros(): Promise<ListarLivrosResponse>;
   obterHoje(): Promise<ObterHojeResponse>;
@@ -51,8 +70,22 @@ export interface ClienteBiblioteca {
 }
 
 export function criarCliente(endereco: string): ClienteBiblioteca {
-  const stub = new BibliotecaClient(endereco, grpc.credentials.createInsecure());
+  let token: string | undefined;
+  const stub = new BibliotecaClient(endereco, grpc.credentials.createInsecure(), {
+    interceptors: [anexarToken(() => token)],
+  });
   return {
+    entrar: async (login, senha) => {
+      const resposta = await chamar(stub.entrar.bind(stub), { login, senha });
+      token = resposta.token;
+      return resposta;
+    },
+    usarToken: (novo) => {
+      token = novo;
+    },
+    sair: () => {
+      token = undefined;
+    },
     listarUsuarios: () => chamar(stub.listarUsuarios.bind(stub), {}),
     listarLivros: () => chamar(stub.listarLivros.bind(stub), {}),
     obterHoje: () => chamar(stub.obterHoje.bind(stub), {}),

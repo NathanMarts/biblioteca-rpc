@@ -1,5 +1,6 @@
 import type { Db } from "./db.js";
-import { naoEncontrado } from "./erros.js";
+import { ehDataValida, somarDias } from "./datas.js";
+import { argumentoInvalido, naoEncontrado, precondicao } from "./erros.js";
 import type { Relogio } from "./relogio.js";
 
 export interface Usuario {
@@ -22,6 +23,12 @@ export interface Exemplar {
   nomeUsuario: string;
   dataEmprestimo: string;
 }
+
+/** Dias que um Exemplar pode ficar com o Usuário sem Atraso. */
+export const PRAZO_EM_DIAS = 7;
+
+/** Máximo de Empréstimos ativos por Usuário. */
+export const LIMITE_DE_EMPRESTIMOS = 3;
 
 const SELECT_LIVRO = `
   SELECT l.codigo, l.titulo, l.autor,
@@ -66,6 +73,71 @@ export class Biblioteca {
       )
       .all(codigoLivro) as (Omit<Exemplar, "disponivel"> & { disponivel: number })[];
     return { livro, exemplares: exemplares.map((e) => ({ ...e, disponivel: e.disponivel === 1 })) };
+  }
+
+  realizarEmprestimo(codigoUsuario: string, codigoLivro: string, dataEmprestimo: string) {
+    const emprestar = this.db.transaction(() => {
+      this.buscarUsuario(codigoUsuario);
+      this.buscarLivro(codigoLivro);
+      if (!ehDataValida(dataEmprestimo) || dataEmprestimo > this.hoje()) {
+        throw argumentoInvalido("Data inválida");
+      }
+      if (this.emprestimoAtivo(codigoUsuario, codigoLivro)) {
+        throw precondicao("Usuário já possui um exemplar deste livro");
+      }
+      if (this.contarEmprestimosAtivos(codigoUsuario) >= LIMITE_DE_EMPRESTIMOS) {
+        throw precondicao("Usuário com limite de empréstimos atingido");
+      }
+      const exemplar = this.db
+        .prepare(
+          `SELECT e.codigo FROM exemplar e
+           WHERE e.codigo_livro = ?
+             AND NOT EXISTS (SELECT 1 FROM emprestimo a
+                             WHERE a.codigo_exemplar = e.codigo AND a.data_devolucao IS NULL)
+           ORDER BY e.numero LIMIT 1`,
+        )
+        .get(codigoLivro) as { codigo: string } | undefined;
+      if (!exemplar) throw precondicao("Livro indisponível");
+      this.db
+        .prepare(
+          "INSERT INTO emprestimo (codigo_exemplar, codigo_usuario, data_emprestimo) VALUES (?, ?, ?)",
+        )
+        .run(exemplar.codigo, codigoUsuario, dataEmprestimo);
+      return {
+        codigoExemplar: exemplar.codigo,
+        dataEmprestimo,
+        dataLimite: somarDias(dataEmprestimo, PRAZO_EM_DIAS),
+      };
+    });
+    return emprestar();
+  }
+
+  private buscarUsuario(codigoUsuario: string): Usuario {
+    const usuario = this.db
+      .prepare("SELECT codigo, nome FROM usuario WHERE codigo = ?")
+      .get(codigoUsuario) as Usuario | undefined;
+    if (!usuario) throw naoEncontrado("Usuário não encontrado");
+    return usuario;
+  }
+
+  /** O Empréstimo ativo do Usuário para algum Exemplar do Livro, se houver. */
+  private emprestimoAtivo(codigoUsuario: string, codigoLivro: string) {
+    return this.db
+      .prepare(
+        `SELECT a.id, a.codigo_exemplar AS codigoExemplar
+         FROM emprestimo a JOIN exemplar e ON e.codigo = a.codigo_exemplar
+         WHERE a.codigo_usuario = ? AND e.codigo_livro = ? AND a.data_devolucao IS NULL`,
+      )
+      .get(codigoUsuario, codigoLivro) as { id: number; codigoExemplar: string } | undefined;
+  }
+
+  private contarEmprestimosAtivos(codigoUsuario: string): number {
+    const { total } = this.db
+      .prepare(
+        "SELECT COUNT(*) AS total FROM emprestimo WHERE codigo_usuario = ? AND data_devolucao IS NULL",
+      )
+      .get(codigoUsuario) as { total: number };
+    return total;
   }
 
   private buscarLivro(codigoLivro: string): Livro {

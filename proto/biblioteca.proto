@@ -13,6 +13,13 @@ service Biblioteca {
   // Informa se o Livro está disponível e a situação de cada Exemplar.
   // Erros: NOT_FOUND "Livro não encontrado".
   rpc ConsultarLivro(ConsultarLivroRequest) returns (ConsultarLivroResponse);
+
+  // Empresta ao Usuário o Exemplar disponível de menor código do Livro.
+  // Erros: NOT_FOUND "Usuário não encontrado" / "Livro não encontrado";
+  //        INVALID_ARGUMENT "Data inválida";
+  //        FAILED_PRECONDITION "Usuário já possui um exemplar deste livro" /
+  //          "Usuário com limite de empréstimos atingido" / "Livro indisponível".
+  rpc RealizarEmprestimo(RealizarEmprestimoRequest) returns (RealizarEmprestimoResponse);
 }
 
 message Usuario {
@@ -56,4 +63,16 @@ message ConsultarLivroRequest {
 message ConsultarLivroResponse {
   Livro livro = 1;
   repeated Exemplar exemplares = 2;
+}
+
+message RealizarEmprestimoRequest {
+  string codigo_usuario = 1;
+  string codigo_livro = 2;
+  string data_emprestimo = 3; // AAAA-MM-DD; não pode ser futura
+}
+
+message RealizarEmprestimoResponse {
+  string codigo_exemplar = 1;
+  string data_emprestimo = 2;
+  string data_limite = 3;     // data_emprestimo + 7 dias
 }

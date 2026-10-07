@@ -1,7 +1,8 @@
 import { status, type ServiceError } from "@grpc/grpc-js";
-import { select } from "@inquirer/prompts";
+import { input, select } from "@inquirer/prompts";
 import { ENDERECO } from "../config.js";
 import type { Exemplar } from "../generated/biblioteca.js";
+import { relogioDoAmbiente } from "../server/relogio.js";
 import { criarCliente, type ClienteBiblioteca } from "./cliente.js";
 import { tabela } from "./tabela.js";
 
@@ -16,6 +17,15 @@ async function escolherLivro(cliente: ClienteBiblioteca): Promise<string> {
   });
 }
 
+async function escolherUsuario(cliente: ClienteBiblioteca): Promise<string> {
+  const { usuarios } = await cliente.listarUsuarios();
+  return select({
+    message: "Usuário:",
+    choices: usuarios.map((u) => ({ name: `${u.codigo}  ${u.nome}`, value: u.codigo })),
+    pageSize: 12,
+  });
+}
+
 function situacaoDoExemplar(e: Exemplar): string {
   return e.disponivel
     ? "Disponível"
@@ -23,6 +33,13 @@ function situacaoDoExemplar(e: Exemplar): string {
 }
 
 const acoes: Record<string, Acao> = {
+  "Realizar empréstimo": async (cliente) => {
+    const usuario = await escolherUsuario(cliente);
+    const livro = await escolherLivro(cliente);
+    const data = await input({ message: "Data do empréstimo (AAAA-MM-DD):", default: relogioDoAmbiente()() });
+    const r = await cliente.realizarEmprestimo(usuario, livro, data.trim());
+    console.log(`✔ Exemplar ${r.codigoExemplar} emprestado em ${r.dataEmprestimo}. Devolver até ${r.dataLimite}.`);
+  },
   "Listar livros": async (cliente) => {
     const { livros } = await cliente.listarLivros();
     console.log(

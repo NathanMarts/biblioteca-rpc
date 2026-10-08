@@ -35,9 +35,10 @@ async function escolherUsuario(cliente: ClienteBiblioteca): Promise<string> {
 }
 
 function situacaoDoExemplar(e: Exemplar): string {
-  return e.disponivel
-    ? "Disponível"
-    : `Emprestado para ${e.nomeUsuario} (${e.codigoUsuario}) desde ${e.dataEmprestimo}`;
+  if (e.disponivel) return "Disponível";
+  // Sem login, o servidor não revela quem está com o Exemplar.
+  if (!e.codigoUsuario) return `Emprestado desde ${e.dataEmprestimo}`;
+  return `Emprestado para ${e.nomeUsuario} (${e.codigoUsuario}) desde ${e.dataEmprestimo}`;
 }
 
 const acoes: Record<string, Acao> = {

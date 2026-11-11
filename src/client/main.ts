@@ -5,6 +5,11 @@ import { Situacao, type Exemplar } from "../generated/biblioteca.js";
 import { criarCliente, type ClienteBiblioteca } from "./cliente.js";
 import { perguntar, selecionar, VOLTAR } from "./prompts.js";
 import { tabela } from "./tabela.js";
+import { styleText } from "node:util";
+
+/** Ícones das mensagens: verde para sucesso, vermelho para erro (sem cor se a saída não for um terminal). */
+const OK = styleText("green", "✓");
+const ERRO = styleText("red", "✗");
 
 type Acao = (cliente: ClienteBiblioteca) => Promise<void>;
 
@@ -50,7 +55,7 @@ const acoes: Record<string, Acao> = {
     if (data === VOLTAR) throw new VoltarAoMenu();
     const resposta = await cliente.realizarEmprestimo(usuario, livro, data.trim());
     console.log(
-      `✔ Exemplar ${resposta.codigoExemplar} emprestado em ${resposta.dataEmprestimo}. Devolver até ${resposta.dataLimite}.`,
+      `${OK} Exemplar ${resposta.codigoExemplar} emprestado em ${resposta.dataEmprestimo}. Devolver até ${resposta.dataLimite}.`,
     );
   },
   "Devolver livro": async (cliente) => {
@@ -71,7 +76,7 @@ const acoes: Record<string, Acao> = {
       })),
     );
     const resposta = await cliente.devolverLivro(usuario, livro);
-    console.log(`✔ Exemplar ${resposta.codigoExemplar} devolvido em ${resposta.dataDevolucao}.`);
+    console.log(`${OK} Exemplar ${resposta.codigoExemplar} devolvido em ${resposta.dataDevolucao}.`);
   },
   "Empréstimos do usuário": async (cliente) => {
     const { emprestimos } = await cliente.consultarEmprestimosUsuario(await escolherUsuario(cliente));
@@ -152,10 +157,10 @@ async function entrar(cliente: ClienteBiblioteca): Promise<string | undefined> {
     const senha = await password({ message: "Senha:", mask: "*" });
     try {
       const { nome } = await cliente.entrar(login, senha);
-      console.log(`✔ Bem-vindo(a), ${nome}.`);
+      console.log(`${OK} Bem-vindo(a), ${nome}.`);
       return nome;
     } catch (erro) {
-      console.log(`✖ ${mensagemDeErro(erro)}`);
+      console.log(`${ERRO} ${mensagemDeErro(erro)}`);
       if ((erro as Partial<ServiceError>).code !== status.UNAUTHENTICATED) return undefined;
     }
   }
@@ -163,14 +168,35 @@ async function entrar(cliente: ClienteBiblioteca): Promise<string | undefined> {
 
 const ENTRAR = "Entrar";
 const SAIR_DA_SESSAO = "Sair da sessão";
-const SAIR = "Sair";
+const SAIR = "Fechar o sistema";
+
+/**
+ * Avisos exibidos no menu quando não há Sessão. São só uma dica para o operador: quem decide o
+ * acesso é o servidor (interceptador de autenticação), que recusa a chamada mesmo se ela for feita.
+ */
+const AVISO_SEM_LOGIN: Record<string, string> = {
+  "Realizar empréstimo": "requer login",
+  "Devolver livro": "requer login",
+  "Empréstimos do usuário": "requer login",
+  "Histórico do livro": "requer login",
+  "Consultar livro": "sem mostrar com quem está o livro",
+  "Listar usuários": "requer login",
+};
+const LARGURA_DO_MENU = Math.max(...Object.keys(AVISO_SEM_LOGIN).map((nome) => nome.length));
+
+function comAviso(nome: string): string {
+  const aviso = AVISO_SEM_LOGIN[nome];
+  if (!aviso) return nome;
+  // Dois espaços após o ⚠: no terminal do Windows ele pode ocupar duas colunas.
+  return `${nome.padEnd(LARGURA_DO_MENU)}  ${styleText("yellow", "⚠")}  ${styleText("dim", aviso)}`;
+}
 
 async function main() {
   let certificado: string | undefined;
   try {
     certificado = TLS_LIGADO ? lerArquivoTls(ARQUIVO_CERTIFICADO) : undefined;
   } catch (erro) {
-    console.error(`✖ ${erro instanceof Error ? erro.message : erro}`);
+    console.error(`${ERRO} ${erro instanceof Error ? erro.message : erro}`);
     process.exit(1);
   }
   const cliente = criarCliente(ENDERECO, { certificado });
@@ -182,7 +208,11 @@ async function main() {
       const sessao = bibliotecario ? `${SAIR_DA_SESSAO} (${bibliotecario})` : ENTRAR;
       const escolha = await select({
         message: bibliotecario ? `O que deseja fazer, ${bibliotecario}?` : "O que deseja fazer? (sem login)",
-        choices: [...Object.keys(acoes), sessao, SAIR].map((nome) => ({ name: nome, value: nome })),
+        choices: [...Object.keys(acoes), sessao, SAIR].map((nome) => ({
+          name: bibliotecario ? nome : comAviso(nome),
+          value: nome,
+          short: nome,
+        })),
         pageSize: 12,
       });
       if (escolha === SAIR) break;
@@ -191,7 +221,7 @@ async function main() {
       } else if (escolha === sessao) {
         cliente.sair();
         bibliotecario = undefined;
-        console.log("✔ Sessão encerrada.");
+        console.log(`${OK} Sessão encerrada.`);
       } else {
         try {
           await acoes[escolha](cliente);
@@ -200,9 +230,9 @@ async function main() {
           if ((erro as Partial<ServiceError>).code === status.UNAUTHENTICATED) {
             cliente.sair();
             bibliotecario = undefined;
-            console.log(`✖ ${mensagemDeErro(erro)}. Escolha "${ENTRAR}" no menu para fazer login.`);
+            console.log(`${ERRO} ${mensagemDeErro(erro)}. Escolha "${ENTRAR}" no menu para fazer login.`);
           } else if (!(erro instanceof VoltarAoMenu)) {
-            console.log(`✖ ${mensagemDeErro(erro)}`);
+            console.log(`${ERRO} ${mensagemDeErro(erro)}`);
           }
         }
       }

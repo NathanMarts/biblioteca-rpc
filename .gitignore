@@ -4,3 +4,8 @@ node_modules/
 *.db-wal
 *.db-shm
 certs/
+
+# Material de entrega (fica só local)
+.scratch/entrega/
+*.pdf
+*.zip
